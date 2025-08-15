@@ -1,0 +1,66 @@
+/* Colores y medidas principales */
+:root{
+  --topbar-h: 56px;
+  --sidebar-w: 270px;
+  --green: #178a47; /* similar al header original */
+  --green-dark: #116b38;
+}
+
+/* Topbar (verde) */
+.topbar{ background: var(--green); }
+.brand{ font-weight: 700; letter-spacing:.2px; }
+.brand-emp{ color:#cfead9; font-weight:700; }
+.avatar-circle{
+  width:26px; height:26px; border-radius:50%;
+  background: rgba(255,255,255,.2); display:inline-flex; align-items:center; justify-content:center;
+}
+
+/* Sidebar desktop */
+.sidebar{
+  width: var(--sidebar-w);
+  min-height: calc(100vh - var(--topbar-h));
+  background: #f5f7fa;
+  border-right: 1px solid #e7eaef;
+  position: sticky; top: var(--topbar-h);
+}
+.sidebar .profile{
+  background: #fff; border-bottom:1px solid #e7eaef;
+}
+.sidebar .avatar{
+  width:42px; height:42px; border-radius:50%;
+  background: #e9ecef; color:#6c757d;
+  display:flex; align-items:center; justify-content:center; font-size:22px;
+}
+.status-dot{
+  width:10px; height:10px; border-radius:50%; background:#22c55e; display:inline-block;
+}
+
+/* Títulos de sección */
+.section-title{
+  padding: .8rem 1rem .4rem;
+  font-size: .78rem; text-transform: uppercase; letter-spacing:.5px;
+  color:#6b7280; font-weight:600;
+}
+
+/* Enlaces del menú (desktop) */
+.side-item{
+  color:#1f2937; padding:.55rem 1rem; border-radius:.5rem; margin:.15rem .5rem;
+  display:flex; align-items:center; gap:.6rem;
+}
+.side-item:hover{ background:#e7f1ff; color:#0b5ed7; }
+.side-item.active{
+  background:#e7f1ff; color:#0b5ed7; font-weight:600; position:relative;
+}
+.side-item.active::before{
+  content:''; position:absolute; left:-8px; top:8px; bottom:8px; width:3px; background:#0b5ed7; border-radius:3px;
+}
+
+/* Área principal */
+.main{ min-height: calc(100vh - var(--topbar-h)); background:#fff; }
+
+/* Offcanvas de móvil con mismo color de topbar en header */
+.sidebar-off .profile .avatar{ background:#e9ecef; }
+.list-group-item.active{ background:#0b5ed7; border-color:#0b5ed7; }
+
+/* Tarjetas (si las usas) */
+.card{ border:0; border-radius:12px; box-shadow:0 8px 18px rgba(0,0,0,.05); }
