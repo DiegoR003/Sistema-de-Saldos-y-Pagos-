@@ -106,7 +106,7 @@ $menu_conf = [
       <div class="profile px-3 py-3 d-flex align-items-center gap-3">
         <div class="avatar"><i class="bi bi-person-fill"></i></div>
         <div class="small">
-          <div class="fw-semibold">Usuario</div>
+          <div class="fw-semibold">Leonel Pimentel Agundez</div>
           <div class="d-flex align-items-center gap-2">
             <span class="status-dot"></span><span class="opacity-75">Online</span>
           </div>

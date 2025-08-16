@@ -37,7 +37,7 @@ if (!defined('BASE_URL')) {
       <div class="ms-auto">
         <div class="btn btn-outline-light rounded-pill px-3 d-flex align-items-center gap-2">
           <span class="avatar-circle"><i class="bi bi-person-fill"></i></span>
-          <span>Usuario</span>
+          <span>Leonel Pimentel Agundez</span>
         </div>
       </div>
     </div>

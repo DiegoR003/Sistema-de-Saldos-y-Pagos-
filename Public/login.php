@@ -161,7 +161,7 @@ body {
       <div class="card-topbar"></div>
       <h2 id="card-title" class="card-title">Iniciar Sesión</h2>
 
-      <form class="form" action="#" method="post" novalidate>
+      <form class="form" action="index.php" action="#" method="post" novalidate>
         <label class="field with-icon-right">
           <span class="sr-only">Usuario o correo</span>
           <input type="text" name="user" autocomplete="username" placeholder="Correo Electrónico" />
@@ -183,8 +183,8 @@ body {
             </svg>
           </span>
         </label>
-
-        <button class="btn" type="submit">Iniciar Sesion</button>
+        
+        <button  class="btn" type="submit">Iniciar Sesion</button>
       </form>
     </section>
   </main>
