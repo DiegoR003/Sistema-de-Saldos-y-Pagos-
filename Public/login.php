@@ -26,7 +26,7 @@ body {
   margin: 0;
   font-family: 'Nunito', system-ui, -apple-system, Segoe UI, Roboto, 'Helvetica Neue', Arial, sans-serif;
   color: #2a2a2a;
-  background: linear-gradient(180deg, #2f86c1 0%, #2a7ab1 40%, #2a7ab1 100%);
+  background: #fff;
 }
 
 /* Layout */
@@ -39,9 +39,10 @@ body {
 }
 
 .brand {
-  color: #e9f4ff;
+  color: #212529;
   font-weight: 700;
   font-size: clamp(28px, 4vw, 48px);
+  font-family: "Overpass", sans-serif;
   margin: 0;
   letter-spacing: 0.5px;
 }
@@ -145,6 +146,160 @@ body {
 }
 
 
+
+/* Animaciones para las bananas */
+.banana{
+  position: absolute;
+  right: 5%;
+  bottom: 2%;
+  z-index: -1;
+
+   /* Animación */
+  animation: rotateBanana 15s linear infinite;
+}
+
+@keyframes rotateBanana {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.banana2{
+  position: absolute;
+  left: 5%;
+  bottom: 30%;
+  z-index: -1;
+
+   /* Animación */
+  animation: rotateBanana2 15s linear infinite;
+}
+
+@keyframes rotateBanana2 {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.banana3{
+  position: absolute;
+  right: 5%;
+  bottom: 58%;
+  z-index: -1;
+
+   /* Animación */
+  animation: rotateBanana3 15s linear infinite;
+}
+
+@keyframes rotateBanana3 {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.banana4{
+  position: absolute;
+  left: 5%;
+  bottom: 80%;
+  z-index: -1;
+
+   /* Animación */
+  animation: rotateBanana4 15s linear infinite;
+}
+
+@keyframes rotateBanana4 {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+
+/* Animación de la búrbuja*/
+
+.bubble {
+  position: absolute;
+  bottom: 25%;
+  left: 2%;
+  z-index: -1; 
+}
+
+:root{
+  --decor-speed: 6s;
+  --decor-amp: 12px;
+  --blob1: #fff2a8; /* crema */
+  --blob2: #ffe36d; /* amarillo */
+}
+
+/* Colores de fondo suaves */
+body { background:#fffbee; }
+
+/* Capa de decoraciones detrás del contenido */
+.bg-decor{
+  position:fixed; inset:0; z-index:0;
+  pointer-events:none; /* no bloquea clics */
+  overflow:hidden;
+}
+.decor{ position:absolute; user-select:none; opacity:.9; will-change:transform; }
+
+/* Blobs (manchas) sin imágenes */
+.blob{ position:absolute; border-radius:50%; filter:blur(20px); opacity:.35; }
+.blob-1{
+  width:42vw; height:42vw; max-width:720px; max-height:720px;
+  top:-15vw; right:-12vw;
+  background: radial-gradient(circle at 30% 30%, var(--blob2), var(--blob1));
+  animation: floatY calc(var(--decor-speed) * 1.5) ease-in-out infinite;
+}
+.blob-2{
+  width:22vw; height:22vw; max-width:420px; max-height:420px;
+  bottom:-8vw; left:-10vw;
+  background: radial-gradient(circle at 40% 40%, var(--blob1), var(--blob2));
+  animation: floatY calc(var(--decor-speed) * 1.1) ease-in-out infinite reverse;
+}
+
+/* Piezas sutiles (posiciones no interfieren con la UI) */
+
+.decor-lupa{ top:33vh; left:30vw; width:44px;
+  animation: sway var(--decor-speed) ease-in-out infinite, floatY calc(var(--decor-speed)*1.2) ease-in-out infinite;
+}
+.decor-plane{ top:75vh; left:420px; width:356px;
+  animation: planeMove 18s linear infinite, floatY calc(var(--decor-speed)*.9) ease-in-out infinite;
+}
+
+/* Logo fijo arriba-izquierda  */
+.login-logo{
+  position:fixed; top:24px; left:32px; z-index:2; text-decoration:none;
+}
+.login-logo img{ height:60px; display:block; }
+
+/* Animaciones */
+@keyframes spin{ from{transform:rotate(0)} to{transform:rotate(360deg)} }
+@keyframes floatY{ 0%,100%{transform:translateY(0)} 50%{transform:translateY(calc(var(--decor-amp)*-1))} }
+@keyframes sway{ 0%,100%{transform:rotate(-6deg)} 50%{transform:rotate(6deg)} }
+@keyframes planeMove{
+  0%{ transform:translateX(0) translateY(0) rotate(-6deg); }
+  50%{ transform:translateX(55vw) translateY(-3vh) rotate(2deg); }
+  100%{ transform:translateX(105vw) translateY(0) rotate(0deg); }
+}
+
+/* Accesibilidad */
+@media (prefers-reduced-motion: reduce){
+  .blob, .decor{ animation:none !important; }
+}
+
+
+
+
 /* Responsive */
 @media (max-width: 420px) {
   .card-title { font-size: 15px; }
@@ -154,8 +309,11 @@ body {
 
    </style>
 <body>
+
+      <!-- Contenido del login -->
+    
     <main class="page">
-    <h1 class="brand">Sistema Pagos</h1>
+    <h1 class="brand">Sistema de Pagos</h1>
 
     <section class="card" role="dialog" aria-labelledby="card-title">
       <div class="card-topbar"></div>
@@ -189,5 +347,71 @@ body {
     </section>
   </main>
      
+  <div class="banana">
+    <img src="./assets/Banana.png" alt="">
+  </div>
+
+  <div class="banana2">
+    <img src="./assets/Banana.png" alt="">
+  </div>
+
+  <div class="banana3">
+    <img src="./assets/Banana.png" alt="">
+  </div>
+
+  <div class="banana4">
+    <img src="./assets/Banana.png" alt="">
+  </div>
+
+
+  <!-- Fondo decorativo (no afecta el layout) -->
+<div class="bg-decor" aria-hidden="true">
+  <span class="blob blob-1"></span>
+  <span class="blob blob-2"></span>
+
+
+  <!-- Lupa flotando -->
+  <img class="decor decor-lupa" src="./assets/lupa.png" alt="Lupa">
+
+  <!-- Avioncito que cruza -->
+  <img class="decor decor-plane" src="./assets/paper.png" alt="Paper" >
+  
+</div>
+
+<!-- Logo fijo en la misma esquina de la página original -->
+<a class="login-logo" href="/">
+  <img src="./assets/logo.png" alt="Banana Group">
+</a>
+
+<!-- Tu burbuja -->
+<img src="./assets/burbuja.png" alt="Burbuja" class="bubble">
+
+<script>
+  const bubble = document.querySelector(".bubble");
+
+  let x = 100, y = 100;   // posición inicial
+  let dx = 1, dy = 1;     // velocidad (px por frame) -> cambia a 3 o 4 si  quieres que vaya más rápido
+  const speed = 16;       // ~60fps (16ms por frame)
+
+  function move() {
+    const w = window.innerWidth - bubble.offsetWidth;
+    const h = window.innerHeight - bubble.offsetHeight;
+
+    x += dx;
+    y += dy;
+
+    // Rebote en los bordes
+    if (x <= 0 || x >= w) dx *= -1;
+    if (y <= 0 || y >= h) dy *= -1;
+
+    bubble.style.left = x + "px";
+    bubble.style.top = y + "px";
+
+    setTimeout(move, speed);
+  }
+
+  move();
+</script>
+
 </body>
 </html>
