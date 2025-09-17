@@ -378,7 +378,7 @@ body { background:#fffbee; }
   
 </div>
 
-<!-- Logo fijo en la misma esquina de la página original -->
+<!-- Logo fijo en la  esquina -->
 <a class="login-logo" href="/">
   <img src="./assets/logo.png" alt="Banana Group">
 </a>

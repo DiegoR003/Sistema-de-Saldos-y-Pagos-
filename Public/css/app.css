@@ -2,14 +2,15 @@
 :root{
   --topbar-h: 56px;
   --sidebar-w: 270px;
-  --green: #178a47; /* similar al header original */
-  --green-dark: #116b38;
+  --yellow: #fff2a8; /* color para el header */
+  --yellow-dark: #ffe36d;
 }
 
-/* Topbar (verde) */
-.topbar{ background: var(--green); }
+/* Topbar (Amarillo) */
+
+.topbar{ background: var(--yellow); }
 .brand{ font-weight: 700; letter-spacing:.2px; }
-.brand-emp{ color:#cfead9; font-weight:700; }
+.brand-emp{ color:#fff; font-weight:700; }
 .avatar-circle{
   width:26px; height:26px; border-radius:50%;
   background: rgba(255,255,255,.2); display:inline-flex; align-items:center; justify-content:center;
@@ -59,7 +60,7 @@
 .main{ min-height: calc(100vh - var(--topbar-h)); background:#fff; }
 
 /* Offcanvas de móvil con mismo color de topbar en header */
-.sidebar-off .profile .avatar{ background:#e9ecef; }
+.sidebar-off .profile .avatar{ background:#fff; }
 .list-group-item.active{ background:#0b5ed7; border-color:#0b5ed7; }
 
 /* Tarjetas (si las usas) */

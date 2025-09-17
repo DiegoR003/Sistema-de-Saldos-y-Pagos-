@@ -99,7 +99,12 @@ $menu_conf = [
   <!-- Sidebar móvil (offcanvas) -->
   <div class="offcanvas offcanvas-start sidebar-off" tabindex="-1" id="mobileSidebar" aria-labelledby="mobileSidebarLabel">
     <div class="offcanvas-header topbar text-white">
-      <h5 class="offcanvas-title m-0" id="mobileSidebarLabel">Banana Group<span class="brand-emp">MX</span></h5>
+     <!-- <h5 class="offcanvas-title m-0" id="mobileSidebarLabel">Banana Group<span class="brand-emp">MX</span></h5> -->
+        <!-- Logo fijo en la  esquina -->
+     <a class="login-logo" href="/">
+  <img src="./assets/logo.png" alt="Banana Group">
+    </a>
+      </a>
       <button type="button" class="btn-close btn-close-white" data-bs-dismiss="offcanvas" aria-label="Cerrar"></button>
     </div>
     <div class="offcanvas-body p-0">

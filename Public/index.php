@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/../Includes/header.php';
 require_once __DIR__ . '/../Includes/sidebar.php';
+require_once __DIR__ . '/../Includes/footer.php';
 
 $allowed = ['inicio','cobrar','servicios','clientes','cobros','corte_diario','pagos_atrasados','usuarios'];
 $m   = $_GET['m'] ?? 'inicio';
@@ -14,4 +15,4 @@ if (file_exists($modulePath)) {
      . htmlspecialchars($mod) . '</div></div>';
 }
 
-require_once __DIR__ . '/../Includes/footer.php';
+
