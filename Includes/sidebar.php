@@ -113,7 +113,7 @@ $menu_conf = [
         <div class="small">
           <div class="fw-semibold">Leonel Pimentel Agundez</div>
           <div class="d-flex align-items-center gap-2">
-            <span class="status-dot"></span><span class="opacity-75">Online</span>
+            <span class="status-dot"></span><span class="opacity-75">Activo</span>
           </div>
         </div>
       </div>
