@@ -97,6 +97,7 @@ if (!defined('BASE_URL')) {
         <img src="./assets/logo.png" alt="Banana Group" style="height:60px;">
       </a>
 
+
       <!-- Usuario -->
       <div class="ms-auto dropdown">
         <button
