@@ -71,7 +71,7 @@
             <div>Dirección: <span class="text-dark">coban</span></div>
             <div>Teléfono: <span class="text-dark">4989321313</span></div>
             <div>Servicio contratado:
-              <span class="text-decoration-none">Claro</span>
+              <span class="text-decoration-none">Studio</span>
               <span class="text-muted">$30.00</span>
             </div>
             <div class="mt-1">Estado de pago: <span class="badge-overdue">Vencida</span></div>
