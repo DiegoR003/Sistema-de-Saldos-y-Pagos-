@@ -16,8 +16,8 @@
   display: inline-flex;
   align-items: center;
   background: #fdd835;       /* info */
-  border-color: #0dcaf0;
-  color: #fff;
+  border-color: #fdd835;
+  color: #000000;
 }
 .servicios .search-card .btn-go:hover {
   filter: brightness(.95);
