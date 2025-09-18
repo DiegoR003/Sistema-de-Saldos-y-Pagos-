@@ -83,7 +83,7 @@ if (!defined('BASE_URL')) {
 <body class="layout">
   <nav class="navbar topbar navbar-dark shadow-sm">
     <div class="container-fluid">
-      <button class="btn btn-link text-white d-lg-none p-0 me-2"
+      <button class="btn btn-link text-dark d-lg-none p-0 me-2"
               type="button"
               data-bs-toggle="offcanvas"
               data-bs-target="#mobileSidebar"

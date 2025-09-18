@@ -105,7 +105,7 @@ $menu_conf = [
   <img src="./assets/logo.png" alt="Banana Group">
     </a>
       </a>
-      <button type="button" class="btn-close btn-close-white" data-bs-dismiss="offcanvas" aria-label="Cerrar"></button>
+      <button type="button" class="btn-close btn-close-dark" data-bs-dismiss="offcanvas" aria-label="Cerrar"></button>
     </div>
     <div class="offcanvas-body p-0">
       <div class="profile px-3 py-3 d-flex align-items-center gap-3">
