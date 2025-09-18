@@ -157,7 +157,7 @@
           </tr>
 
           <tr>
-            <td data-label="Cliente" class="cli-name">Omar</td>
+            <td data-label="Cliente" class="cli-name">Omar Cano</td>
             <td data-label="RFC">645646</td>
             <td data-label="Dirección">guatemala</td>
             <td data-label="Teléfono">498932133453</td>
