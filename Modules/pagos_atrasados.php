@@ -66,7 +66,7 @@
     <div class="card-body">
       <div class="d-flex flex-column flex-md-row justify-content-between gap-2">
         <div>
-          <div class="name mb-1">dayana saucedo</div>
+          <div class="name mb-1">Dayana Lorena</div>
           <div class="meta">
             <div>Dirección: <span class="text-dark">coban</span></div>
             <div>Teléfono: <span class="text-dark">4989321313</span></div>
@@ -95,13 +95,13 @@
     <div class="card-body">
       <div class="d-flex flex-column flex-md-row justify-content-between gap-2">
         <div>
-          <div class="name mb-1">Amado Saucedo</div>
+          <div class="name mb-1">Ismael Jose</div>
           <div class="meta">
             <div>Dirección: <span class="text-dark">guatemala</span></div>
             <div>Teléfono: <span class="text-dark">0165132</span></div>
             <div>Servicio contratado:
-              <span class="text-decoration-none">Carwash</span>
-              <span class="text-muted">$45.00</span>
+              <span class="text-decoration-none">Service Web</span>
+              <span class="text-muted">$3000.00</span>
             </div>
             <div class="mt-1">Estado de pago: <span class="badge-overdue">Vencida</span></div>
           </div>
@@ -128,10 +128,10 @@
           <div class="name mb-1">Josue Martinez</div>
           <div class="meta">
             <div>Dirección: <span class="text-dark">Los Pirules, Col. Las Veredas</span></div>
-            <div>Teléfono: <span class="text-dark">+52 6242131373</span></div>
+            <div>Teléfono: <span class="text-dark">+52 6242132323</span></div>
             <div>Servicio contratado:
-              <span class="text-decoration-none">Web Services</span>
-              <span class="text-muted">$45.00</span>
+              <span class="text-decoration-none">Marketing</span>
+              <span class="text-muted">$1500.00</span>
             </div>
             <div class="mt-1">Estado de pago: <span class="badge-overdue">Vencida</span></div>
           </div>
