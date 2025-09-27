@@ -17,7 +17,7 @@ $menu_top = [
 ];
 
 $menu_cat = [
-  ['slug'=>'servicios','icon'=>'bi-grid',    'text'=>'Servicios'],
+  ['slug'=>'cotizaciones','icon'=>'bi-grid',    'text'=>'Cotizaciones'],
   ['slug'=>'clientes', 'icon'=>'bi-people',  'text'=>'Clientes'],
 ];
 
