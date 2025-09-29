@@ -49,7 +49,7 @@
 
   <!-- Título + acciones superiores -->
   <div class="d-flex align-items-center justify-content-between flex-wrap topbar mb-3">
-    <h3 class="mb-0 fw-semibold">Cotizaciones <span class="text-muted fs-6">Recibidas del cotizador</span></h3>
+    <h3 class="mb-0 fw-semibold">Cotizaciones <span class="text-muted fs-6">Cotizaciones Recibidas </span></h3>
     <div class="d-flex align-items-center gap-2">
       <div class="dropdown">
         <button class="btn btn-light border dropdown-toggle" data-bs-toggle="dropdown" type="button">Exportar</button>
