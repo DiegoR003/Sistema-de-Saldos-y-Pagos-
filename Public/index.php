@@ -1,4 +1,9 @@
 <?php
+
+ini_set('display_errors', 1);
+ini_set('display_startup_errors', 1);
+error_reporting(E_ALL);
+
 require_once __DIR__ . '/../Includes/header.php';
 require_once __DIR__ . '/../Includes/sidebar.php';
 require_once __DIR__ . '/../Includes/footer.php';
