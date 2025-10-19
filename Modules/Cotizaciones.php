@@ -243,9 +243,9 @@ $qs = $_GET; unset($qs['p']);
     <?php endforeach; ?>
   </div>
 
+ 
   <!-- Offcanvas Detalle -->
-  <!-- Offcanvas Detalle -->
-<div class="offcanvas offcanvas-end" tabindex="-1" id="ocDetalleCot">
+<div class="offcanvas offcanvas-end" id="ocDetalleCot" tabindex="-1">
   <div class="offcanvas-header">
     <h5 class="offcanvas-title"><span id="dFolio">COT-XXXX</span></h5>
     <button type="button" class="btn-close" data-bs-dismiss="offcanvas"></button>
@@ -254,21 +254,27 @@ $qs = $_GET; unset($qs['p']);
   <div class="offcanvas-body">
     <div class="mb-1"><strong>Cliente:</strong> <span id="dCliente">—</span> (<span id="dCorreo">—</span>)</div>
     <div class="mb-2"><strong>Fecha:</strong> <span id="dFecha">—</span></div>
-
     <hr>
 
     <!-- Detalle conceptos actuales -->
-    <div class="table-responsive mb-3">
-      <table class="table table-sm">
-        <thead><tr><th>Concepto</th><th class="text-end">Importe</th></tr></thead>
-        <tbody id="dItems"><tr><td>—</td><td class="text-end">$0.00</td></tr></tbody>
-        <tfoot>
-          <tr><th>Subtotal</th><th class="text-end" id="dSubtotal">$0.00</th></tr>
-          <tr><th>IVA <span id="dTasa">16%</span></th><th class="text-end" id="dIva">$0.00</th></tr>
-          <tr><th>Total</th><th class="text-end" id="dTotal">$0.00</th></tr>
-        </tfoot>
-      </table>
-    </div>
+  <table class="table table-sm">
+  <thead>
+    <tr>
+      <th>Concepto</th>
+      <th>Tipo</th> <!-- NUEVO -->
+      <th class="text-end">Importe</th>
+    </tr>
+  </thead>
+  <tbody id="dItems">
+    <tr><td>—</td><td>—</td><td class="text-end">$0.00</td></tr>
+  </tbody>
+  <tfoot>
+    <tr><th>Subtotal</th><th></th><th class="text-end" id="dSubtotal">$0.00</th></tr>
+    <tr><th>IVA <span id="dTasa">16%</span></th><th></th><th class="text-end" id="dIva">$0.00</th></tr>
+    <tr><th>Total</th><th></th><th class="text-end" id="dTotal">$0.00</th></tr>
+  </tfoot>
+</table>
+
 
 
     <!-- Actualizar adicionales 
@@ -285,53 +291,160 @@ $qs = $_GET; unset($qs['p']);
 
     <hr>
 
-    <!-- Acordeón de edición de conceptos -->
+  
      <!-- Editar conceptos (collapse) -->
-    <div class="mb-3">
-      <button class="btn btn-light w-100 text-start d-flex align-items-center justify-content-between"
-              type="button" data-bs-toggle="collapse" data-bs-target="#boxEditarConceptos">
-        <span>Editar conceptos</span>
-        <i class="bi bi-chevron-down"></i>
-      </button>
-      <div class="collapse mt-2" id="boxEditarConceptos">
-        <div class="accordion" id="accordionConceptos"><!-- JS --></div>
-        <div class="form-text">Toca un concepto, elige la opción y se recalcula automáticamente.</div>
-      </div>
-    </div>
-
-   <!-- Periodicidad + Aprobar / Rechazar -->
-    <div class="mb-2">
-      <label class="form-label">Periodicidad de cobro</label>
-      <select class="form-select" name="periodicidad" id="aprPer">
-        <option value="unico">Pago único</option>
-        <option value="mensual" selected>Mensual</option>
-        <option value="bimestral">Bimestral</option>
-      </select>
-    </div>
-
-
-     <div class="d-grid gap-2">
-      <form id="fApr" method="post" action="/Sistema-de-Saldos-y-Pagos-/Public/api/cotizacion_approve.php"
-            onsubmit="return confirm('¿Aprobar esta cotización?');">
-        <input type="hidden" name="id" id="aprId">
-        <button class="btn btn-success" id="btnApr">Aprobar</button>
-      </form>
-      <form id="fRej" method="post" action="/Sistema-de-Saldos-y-Pagos-/Public/api/cotizacion_reject.php"
-            onsubmit="return confirm('¿Rechazar esta cotización?');">
-        <input type="hidden" name="id" id="rejId">
-        <button class="btn btn-outline-danger" id="btnRej">Rechazar</button>
-      </form>
+   <!-- ===== Editar conceptos (contenedor autocontenido) ===== -->
+<div class="card mb-3" id="boxEditarConceptos">
+  <div class="card-header d-flex align-items-center justify-content-between">
+    <strong class="m-0">Editar conceptos</strong>
+    <button class="btn btn-sm btn-light" id="btnToggleEdit" type="button" aria-expanded="false" aria-controls="editCollapse">
+      <span class="me-1">Mostrar</span>
+      <i class="bi bi-chevron-down" id="chevronEdit"></i>
+    </button>
+  </div>
+  <div id="editCollapse" class="collapse">
+    <div class="card-body">
+      <!-- Aquí se pinta tu acordeón -->
+      <div class="accordion" id="accordionConceptos" ></div>
+      <div class="form-text">Toca un concepto, elige la opción y ajusta el tipo de cobro; se recalcula automáticamente.</div>
+      <!-- Si usas el JSON oculto para aprobar -->
+      <input type="hidden" name="billing_json" id="billingJson">
     </div>
   </div>
 </div>
 
 
- <script>
+
+
+
+
+
+   <div class="d-grid gap-2">
+  <form id="fApr" method="post" action="/Sistema-de-Saldos-y-Pagos-/Public/api/cotizacion_approve.php"
+        onsubmit="return confirm('¿Aprobar esta cotización?');">
+    <input type="hidden" name="id" id="aprId">
+    <!-- 🔽 Nuevo input oculto para enviar la configuración de cobro -->
+    <input type="hidden" name="billing_json" id="billingJson">
+    <button class="btn btn-success" id="btnApr">Aprobar</button>
+  </form>
+
+  <form id="fRej" method="post" action="/Sistema-de-Saldos-y-Pagos-/Public/api/cotizacion_reject.php"
+        onsubmit="return confirm('¿Rechazar esta cotización?');">
+    <input type="hidden" name="id" id="rejId">
+    <button class="btn btn-outline-danger" id="btnRej">Rechazar</button>
+  </form>
+</div>
+<script>
 (function(){
   const BASE = '/Sistema-de-Saldos-y-Pagos-/Public/api';
-  const $ = (sel, ctx=document)=>ctx.querySelector(sel);
-  const money = v => Number(v||0).toLocaleString('es-MX',{style:'currency',currency:'MXN'});
 
+  // ============ Helpers únicos (NO duplicar) ============
+  const $  = (sel, ctx=document)=>ctx.querySelector(sel);
+  const $$ = (sel, ctx=document)=>Array.from(ctx.querySelectorAll(sel));
+  const money = v => Number(v||0).toLocaleString('es-MX',{style:'currency',currency:'MXN'});
+  if (!window.CSS) window.CSS = {};
+  if (!CSS.escape) CSS.escape = s => String(s).replace(/[^a-zA-Z0-9_\-]/g, m=>`\\${m}`);
+
+  // ============= FACTURACIÓN: selector tipo de cobro =============
+  const BILLING_RULES = {
+    web:           ['una_vez','recurrente_mensual','recurrente_anual'],
+    publicaciones: ['recurrente_mensual'],
+    'campañas':    ['recurrente_mensual'],
+    stories:       ['recurrente_mensual'],
+    imprenta:      ['una_vez'],
+    fotos:         ['una_vez'],
+    video:         ['una_vez'],
+    ads:           ['recurrente_mensual'],
+    mkt:           ['una_vez'],
+    _default:      ['recurrente_mensual']
+  };
+  const LABEL = {
+    una_vez:'Único pago',
+    recurrente_mensual:'Recurrente mensual',
+    recurrente_bimestral:'Recurrente bimestral',
+    recurrente_anual:'Recurrente anual'
+  };
+  const rulesFor = g => BILLING_RULES[g] || BILLING_RULES._default;
+  const pretty   = k => LABEL[k] || k;
+  const mapType  = (typeKey, maint=false)=>{
+    switch(typeKey){
+      case 'una_vez':              return {typeKey, type:'una_vez',    unit:null,     count:null, maint:!!maint};
+      case 'recurrente_mensual':   return {typeKey, type:'recurrente', unit:'mensual',count:1,   maint:!!maint};
+      case 'recurrente_bimestral': return {typeKey, type:'recurrente', unit:'mensual',count:2,   maint:!!maint};
+      case 'recurrente_anual':     return {typeKey, type:'recurrente', unit:'anual',  count:1,   maint:!!maint};
+      default:                     return {typeKey, type:'recurrente', unit:'mensual',count:1,   maint:!!maint};
+    }
+  };
+
+  let billingDraft = {};
+  let currentId    = null;
+
+  const syncHidden = ()=>{
+    const input = $('#billingJson');
+    if (input) input.value = JSON.stringify(billingDraft);
+  };
+  const setTipoCell = (grupo, typeKey)=>{
+    const cell = $(`[data-tipo="${CSS.escape(grupo)}"]`);
+    if (cell) cell.textContent = pretty(typeKey);
+  };
+
+  // ============= API: cargar cotización =============
+  async function fetchCot(id){
+    const u = `${BASE}/cotizacion_show.php?id=${encodeURIComponent(id)}`;
+    const r = await fetch(u, {cache:'no-store'});
+    if (!r.ok) throw new Error(`HTTP ${r.status} al cargar ${u}`);
+    const j = await r.json().catch(()=>{ throw new Error('Respuesta no es JSON'); });
+    if (!j.ok) throw new Error(j.msg || 'Error en API');
+    return j;
+  }
+
+  // ============= Pintado cabecera / items / totales =============
+  function fillHeader(d){
+    $('#dFolio').textContent   = d.folio || ('COT-'+String(d.id).padStart(5,'0'));
+    $('#dCliente').textContent = d.empresa || '—';
+    $('#dCorreo').textContent  = d.correo  || '—';
+    $('#dFecha').textContent   = d.fecha   || '—';
+
+    // IDs para aprobar/rechazar
+    $('#aprId').value = d.id;
+    $('#rejId').value = d.id;
+
+    // periodicidad (si aplica)
+    if (d.periodicidad) {
+      const per = $('#aprPer');
+      if (per) per.value = d.periodicidad;
+    }
+
+    // habilitar/inhabilitar botones si no está pendiente
+    const pend  = (d.estado === 'pendiente');
+    const btnApr = $('#btnApr');
+    const btnRej = $('#btnRej');
+    if (btnApr) btnApr.disabled = !pend;
+    if (btnRej) btnRej.disabled = !pend;
+  }
+
+  function fillItems(d){
+    const tb = $('#dItems');
+    if (!tb) return;
+    tb.innerHTML = '';
+    (d.items || []).forEach(it=>{
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${it.grupo} - ${it.opcion}</td>
+        <td data-tipo="${it.grupo}">—</td>
+        <td class="text-end">${money(it.valor)}</td>`;
+      tb.appendChild(tr);
+    });
+  }
+
+  function fillTotals(d){
+    $('#dTasa').textContent     = (d.tasa_iva ?? 16) + '%';
+    $('#dSubtotal').textContent = money(d.subtotal);
+    $('#dIva').textContent      = money(d.impuestos);
+    $('#dTotal').textContent    = money(d.total);
+  }
+
+  // ============= Radios del cotizador (valor por grupo) =============
   function conceptOptions(group){
     const MAP = {
       cuenta:        [{v:1575,l:'Obligatorio'}],
@@ -349,138 +462,204 @@ $qs = $_GET; unset($qs['p']);
     return MAP[group] || [];
   }
 
-  async function loadCot(id){
-    const r = await fetch(`${BASE}/cotizacion_show.php?id=${encodeURIComponent(id)}`, {cache:'no-store'});
-    if (!r.ok) throw new Error('HTTP '+r.status);
-    const j = await r.json();
-    if (!j.ok) throw new Error(j.msg || 'Error');
+  async function updateItemValor(cotId, grupo, valor){
+    const body = new URLSearchParams({id:String(cotId), grupo, valor:String(valor)});
+    const res  = await fetch(`${BASE}/cotizacion_item_update.php`, {
+      method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body
+    });
+    const j = await res.json();
+    if (!j.ok) throw new Error(j.msg||'Error al guardar');
     return j;
   }
 
-  function fillHeader(d){
-    $('#dFolio').textContent   = d.folio || ('COT-'+String(d.id).padStart(5,'0'));
-    $('#dCliente').textContent = d.empresa || '—';
-    $('#dCorreo').textContent  = d.correo  || '—';
-    $('#dFecha').textContent   = d.fecha   || '—';
-    $('#aprId').value = d.id; $('#rejId').value = d.id;
-    if (d.periodicidad) $('#aprPer').value = d.periodicidad;
-    const pend = (d.estado === 'pendiente');
-    $('#btnApr').disabled = !pend; $('#btnRej').disabled = !pend;
-  }
+  // ============= Acordeón interno (dentro de "Editar conceptos") =============
+  function buildInnerAccordion(d){
+    const acc = $('#accordionConceptos');
+    if (!acc) return;
 
-  function fillItems(d){
-    const tb = $('#dItems'); tb.innerHTML = '';
-    (d.items || []).forEach(it=>{
-      const tr = document.createElement('tr');
-      tr.innerHTML = `<td>${it.grupo} - ${it.opcion}</td><td class="text-end">${money(it.valor)}</td>`;
-      tb.appendChild(tr);
-    });
-  }
+    acc.innerHTML = '';
 
-  function fillTotals(d){
-    $('#dTasa').textContent     = (d.tasa_iva ?? 16) + '%';
-    $('#dSubtotal').textContent = money(d.subtotal);
-    $('#dIva').textContent      = money(d.impuestos);
-    $('#dTotal').textContent    = money(d.total);
-  }
-
-  function buildAccordion(d){
-    const cont = $('#accordionConceptos');
-    
-    const existingCollapses = cont.querySelectorAll('.accordion-collapse');
-    existingCollapses.forEach(el => {
-        const instance = bootstrap.Collapse.getInstance(el);
-        if (instance) {
-            instance.dispose();
-        }
+    // defaults de facturación por grupo
+    (d.items||[]).forEach(it=>{
+      const g = it.grupo;
+      if (!billingDraft[g]) billingDraft[g] = mapType(rulesFor(g)[0]);
     });
 
-    cont.innerHTML = '';
-
-    (d.items || []).forEach((it,idx)=>{
-      const gid = it.grupo;
+    (d.items||[]).forEach((it, idx)=>{
+      const g   = it.grupo;
       const cur = Number(it.valor||0);
-      const cid = `acc-${gid}-${idx}`;
-      const opts = conceptOptions(gid);
-      const radios = opts.map((o,i)=>`<div class="form-check"><input class="form-check-input js-opt" type="radio" name="opt-${gid}" id="${cid}-${i}" value="${o.v}" data-grupo="${gid}" ${Number(o.v)===cur?'checked':''}><label class="form-check-label" for="${cid}-${i}">${o.l} <span class="text-muted">(${money(o.v)})</span></label></div>`).join('');
+      const cid = `acc-${g}-${idx}`;
+
+      const ropts = conceptOptions(g).length ? conceptOptions(g) : [{v:cur,l:'Actual'}];
+      const radios = ropts.map((o,i)=>`
+        <div class="form-check">
+          <input class="form-check-input js-opt" type="radio"
+                 name="opt-${CSS.escape(g)}" id="${cid}-r${i}" value="${o.v}"
+                 data-grupo="${g}" ${Number(o.v)===cur?'checked':''}>
+          <label class="form-check-label" for="${cid}-r${i}">
+            ${o.l} <span class="text-muted">(${money(o.v)})</span>
+          </label>
+        </div>`).join('');
+
+      const bill = rulesFor(g);
+      const selectBilling = `
+        <div class="border-top pt-2 mt-2">
+          <label class="form-label small mb-1">Tipo de cobro</label>
+          <select class="form-select form-select-sm js-bill" data-grupo="${g}">
+            ${bill.map(k=>`<option value="${k}" ${billingDraft[g]?.typeKey===k?'selected':''}>${pretty(k)}</option>`).join('')}
+          </select>
+          ${g==='web'?`
+            <div class="form-check mt-2">
+              <input class="form-check-input js-maint" type="checkbox" data-grupo="${g}" ${billingDraft[g]?.maint?'checked':''}>
+              <label class="form-check-label small">Incluir mantenimiento anual $2,999</label>
+            </div>`:''}
+        </div>`;
+
       const item = document.createElement('div');
       item.className = 'accordion-item';
-      // **NOTA**: He quitado data-bs-toggle="collapse" del botón para evitar conflictos.
-      item.innerHTML = `<h2 class="accordion-header" id="h-${cid}"><button class="accordion-button collapsed" type="button" data-bs-target="#c-${cid}">${gid} · <small class="ms-2 text-muted">${money(cur)}</small></button></h2><div id="c-${cid}" class="accordion-collapse collapse" data-bs-parent="#accordionConceptos"><div class="accordion-body">${radios || '<div class="text-muted">Sin opciones.</div>'}</div></div>`;
-      cont.appendChild(item);
+      item.innerHTML = `
+        <h2 class="accordion-header" id="h-${cid}">
+          <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#c-${cid}">
+            ${g} · <small class="ms-2 text-muted">${money(cur)}</small>
+          </button>
+        </h2>
+        <div id="c-${cid}" class="accordion-collapse collapse" data-bs-parent="#accordionConceptsInner">
+          <div class="accordion-body">
+            <div class="mb-2">${radios || '<div class="text-muted">Sin opciones.</div>'}</div>
+            ${selectBilling}
+          </div>
+        </div>`;
+      acc.appendChild(item);
     });
 
-    cont.querySelectorAll('.js-opt').forEach(r=>{
-      r.addEventListener('change', async ev=>{
-        const grupo = ev.target.dataset.grupo;
-        const valor = Number(ev.target.value||0);
+    // pinta columna "Tipo" y sincroniza hidden
+    Object.keys(billingDraft).forEach(gr=> setTipoCell(gr, billingDraft[gr].typeKey));
+    syncHidden();
+
+    // Atamos el listener SOLO una vez al contenedor
+    if (!acc.dataset.bound) {
+      acc.addEventListener('change', async ev=>{
+        const g = ev.target?.dataset?.grupo;
+        if (!g) return;
         try{
-          const body = new URLSearchParams({id:d.id, grupo, valor:String(valor)});
-          const res  = await fetch(`${BASE}/cotizacion_item_update.php`, { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body });
-          const j = await res.json();
-          if (!j.ok) throw new Error(j.msg||'Error');
-          const ref = await loadCot(d.id);
-          fillItems(ref); fillTotals(ref);
-          const small = ev.target.closest('.accordion-item').querySelector('.accordion-button small');
-          if (small) small.textContent = money(valor);
-        }catch(e){
-          alert('No se pudo actualizar: '+e.message);
-        }
+          if (ev.target.matches('.js-opt')) {
+            const val = Number(ev.target.value||0);
+            await updateItemValor(currentId, g, val);
+            const ref = await fetchCot(currentId);
+            fillItems(ref); fillTotals(ref);
+            const small = ev.target.closest('.accordion-item')?.querySelector('.accordion-button small');
+            if (small) small.textContent = money(val);
+          }
+          if (ev.target.matches('.js-bill')) {
+            const key = ev.target.value;
+            billingDraft[g] = mapType(key, billingDraft[g]?.maint);
+            setTipoCell(g, billingDraft[g].typeKey);
+            syncHidden();
+          }
+          if (ev.target.matches('.js-maint')) {
+            billingDraft[g].maint = !!ev.target.checked;
+            syncHidden();
+          }
+        }catch(e){ alert(e.message); }
       });
-    });
+      acc.dataset.bound = '1';
+    }
   }
 
+  // ============= Orquestación: abrir detalle =============
   async function openDetail(id){
-    const d = await loadCot(id);
-    fillHeader(d); fillItems(d); fillTotals(d); buildAccordion(d);
+    currentId    = id;
+    billingDraft = {};
+    try{
+      const d = await fetchCot(id);
+      fillHeader(d); fillItems(d); fillTotals(d);
+
+      // Cierra el panel externo (tarjeta "Editar conceptos") por defecto
+      const outer = $('#accEditPanel');
+      if (outer) { try{ bootstrap?.Collapse?.getOrCreateInstance(outer,{toggle:false})?.hide(); }catch(_){} }
+
+      buildInnerAccordion(d);
+    }catch(e){
+      alert('No se pudo cargar el detalle: '+e.message);
+    }
   }
+
   
-  // ============ INICIO DEL NUEVO CÓDIGO ============
-  // Se añade un único listener al contenedor del acordeón
-  const accordionContainer = document.getElementById('accordionConceptos');
-  if (accordionContainer) {
-    accordionContainer.addEventListener('click', function(event) {
-      const button = event.target.closest('.accordion-button');
-      if (!button) return; // Si no se hizo clic en un botón, no hace nada
 
-      // Previene el comportamiento por defecto para tener control total
-      event.preventDefault();
-
-      const targetSelector = button.getAttribute('data-bs-target');
-      if (!targetSelector) return;
-      
-      const targetElement = document.querySelector(targetSelector);
-      if (!targetElement) return;
-
-      // Obtiene o crea la instancia de Bootstrap y ejecuta el método .toggle()
-      const collapseInstance = bootstrap.Collapse.getOrCreateInstance(targetElement);
-      collapseInstance.toggle();
-    });
-  }
-  // ============= FIN DEL NUEVO CÓDIGO =============
-
-  document.querySelectorAll('.js-ver').forEach(btn=>{
-    btn.addEventListener('click', async (e)=>{
-      const id = e.currentTarget.dataset.id;
-      try { await openDetail(id); }
-      catch(err){ alert('No se pudo cargar: '+err.message); }
-    });
+  // ============ 1) Delegación: click en cualquier .js-ver ============
+  document.addEventListener('click', (ev)=>{
+    const btn = ev.target.closest('.js-ver');
+    if (!btn) return;
+    const id = btn.dataset.id;
+    if (id) openDetail(id);
   });
 
-  const off = document.getElementById('ocDetalleCot');
-  if (off){
-    off.addEventListener('click', (ev)=>{
-      const acc = $('#accordionConceptos', off);
-      if (!acc) return;
-      if (!acc.contains(ev.target)){
-        acc.querySelectorAll('.accordion-collapse.show').forEach(el=>{
-          bootstrap.Collapse.getOrCreateInstance(el).hide();
-        });
-      }
+  // ============ 2) Fallback: al abrir el offcanvas por Bootstrap ============
+  const oc = $('#ocDetalleCot');
+  if (oc){
+    oc.addEventListener('show.bs.offcanvas', (ev)=>{
+      const id = ev.relatedTarget?.dataset?.id;
+      if (id) openDetail(id);
     });
   }
 })();
 </script>
+
+
+<script>
+// --- Control de la tarjeta "Editar conceptos" (abre/cierra sin errores) ---
+(function(){
+  const btn      = document.getElementById('btnToggleEdit');
+  const chevron  = document.getElementById('chevronEdit');
+  const collapse = document.getElementById('editCollapse');
+
+  if (!btn || !collapse) return;
+
+  // Instancia Bootstrap Collapse sin auto-toggle
+  const bs = (window.bootstrap && bootstrap.Collapse)
+    ? bootstrap.Collapse.getOrCreateInstance(collapse, { toggle: false })
+    : null;
+
+  // Estado inicial: cerrado
+  const setClosed = () => {
+    btn.setAttribute('aria-expanded', 'false');
+    // Usa el 2º parámetro de toggle para FORZAR el estado (evita el error)
+    btn.classList.toggle('collapsed', true);
+    btn.querySelector('span').textContent = 'Mostrar';
+    if (chevron) { chevron.classList.remove('bi-chevron-up'); chevron.classList.add('bi-chevron-down'); }
+  };
+
+  const setOpen = () => {
+    btn.setAttribute('aria-expanded', 'true');
+    btn.classList.toggle('collapsed', false);
+    btn.querySelector('span').textContent = 'Ocultar';
+    if (chevron) { chevron.classList.remove('bi-chevron-down'); chevron.classList.add('bi-chevron-up'); }
+  };
+
+  setClosed();
+
+  btn.addEventListener('click', (e)=>{
+    e.preventDefault();
+    if (bs) {
+      const isOpen = collapse.classList.contains('show');
+      isOpen ? bs.hide() : bs.show();
+    } else {
+      // Fallback sin Bootstrap
+      const isOpen = collapse.classList.contains('show');
+      collapse.classList.toggle('show', !isOpen);
+      (isOpen ? setClosed : setOpen)();
+    }
+  });
+
+  // Sincroniza estado cuando se usa Bootstrap
+  if (bs) {
+    collapse.addEventListener('shown.bs.collapse', setOpen);
+    collapse.addEventListener('hidden.bs.collapse', setClosed);
+  }
+})();
+</script>
+
+
 
 
  </body>
