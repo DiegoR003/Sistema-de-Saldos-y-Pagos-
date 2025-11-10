@@ -32,18 +32,43 @@ foreach ($pdo->query("SELECT estado, COUNT(*) c FROM cotizaciones GROUP BY estad
 }
 
 /* -------- Total rows + listado -------- */
-$st=$pdo->prepare("SELECT COUNT(*) FROM cotizaciones $W"); $st->execute($args);
-$totalRows=(int)$st->fetchColumn();
-
-$st=$pdo->prepare("
-  SELECT id, empresa, correo, subtotal, impuestos, total, estado, creado_en
-  FROM cotizaciones
+$st = $pdo->prepare("
+  SELECT 
+    c.id, c.empresa, c.correo, c.subtotal, c.impuestos, c.total, c.estado, c.creado_en,
+    COALESCE(
+      CONCAT(
+        COALESCE(s.resumen, '—'),
+        CASE WHEN s.cnt > 2 THEN CONCAT('  (+', s.cnt-2, ' más)') ELSE '' END
+      ),
+      '—'
+    ) AS conceptos_resumen
+  FROM cotizaciones c
+  LEFT JOIN (
+    SELECT
+      t.cotizacion_id,
+      /* primeros 2 conceptos, orden por id (ajusta si quieres otro criterio) */
+      GROUP_CONCAT(CASE WHEN t.rn <= 2 THEN t.lbl END ORDER BY t.rn SEPARATOR ', ') AS resumen,
+      MAX(t.cnt) AS cnt
+    FROM (
+      SELECT
+        ci.cotizacion_id,
+        /* etiqueta bonita: grupo - opcion (si existe) */
+        CONCAT(ci.grupo, IF(ci.opcion IS NULL OR ci.opcion='', '', CONCAT(' - ', ci.opcion))) AS lbl,
+        ROW_NUMBER() OVER (PARTITION BY ci.cotizacion_id ORDER BY ci.id)       AS rn,
+        COUNT(*)    OVER (PARTITION BY ci.cotizacion_id)                        AS cnt
+      FROM cotizacion_items ci
+    ) AS t
+    GROUP BY t.cotizacion_id
+  ) AS s  ON s.cotizacion_id = c.id
   $W
-  ORDER BY creado_en DESC, id DESC
+  ORDER BY c.creado_en DESC, c.id DESC
   LIMIT $pp OFFSET $offset
 ");
 $st->execute($args);
-$rows=$st->fetchAll();
+$rows = $st->fetchAll();
+$totalRows = $totalRows ?? 0;
+
+
 
 /* -------- Helpers -------- */
 function money($n){ return '$'.number_format((float)$n,2); }
@@ -167,7 +192,7 @@ $qs = $_GET; unset($qs['p']);
             </td>
             <td><?= htmlspecialchars($r['empresa']) ?><br><small class="text-muted"><?= htmlspecialchars($r['correo']) ?></small></td>
             <td><span class="fecha"><?= date('Y-m-d', strtotime($r['creado_en'])) ?></span></td>
-            <td><small class="text-muted">—</small></td>
+            <td><small class="text-end"><?= htmlspecialchars($r['conceptos_resumen']) ?></small></td>
             <td class="text-end"><?= money($r['subtotal']) ?></td>
             <td class="text-end"><?= money($r['impuestos']) ?></td>
             <td class="text-end fw-semibold"><?= money($r['total']) ?></td>
@@ -176,14 +201,14 @@ $qs = $_GET; unset($qs['p']);
               <div class="btn-group">
                 <button class="btn btn-sm btn-outline-secondary js-ver" data-id="<?= $id ?>" data-bs-toggle="offcanvas" data-bs-target="#ocDetalleCot">Ver</button>
                 <?php if ($r['estado']==='pendiente'): ?>
-                  <form method="post" action="/Sistema-de-Saldos-y-Pagos-/Public/api/cotizacion_approve.php" class="d-inline" onsubmit="return confirm('¿Aprobar esta cotización?');">
+                 <!-- <form method="post" action="/Sistema-de-Saldos-y-Pagos-/Public/api/cotizacion_approve.php" class="d-inline" onsubmit="return confirm('¿Aprobar esta cotización?');">
                     <input type="hidden" name="id" value="<?= $id ?>">
                     <button class="btn btn-sm btn-success">Aprobar</button>
                   </form>
                   <form method="post" action="/Sistema-de-Saldos-y-Pagos-/Public/api/cotizacion_reject.php" class="d-inline" onsubmit="return confirm('¿Rechazar esta cotización?');">
                     <input type="hidden" name="id" value="<?= $id ?>">
                     <button class="btn btn-sm btn-danger">Rechazar</button>
-                  </form>
+                  </form>-->
                 <?php endif; ?>
                 <button class="btn btn-sm btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown">Más</button>
                 <ul class="dropdown-menu dropdown-menu-end">
@@ -315,6 +340,15 @@ $qs = $_GET; unset($qs['p']);
 
 
 
+ <!-- Selector de RFC de la empresa (emisor) -->
+<div class="mb-3">
+  <label for="aprRfc" class="form-label">RFC emisor (para facturar)</label>
+  <select id="aprRfc" class="form-select">
+    <option value="">Cargando RFCs…</option>
+  </select>
+  <input type="hidden" name="rfc_id" id="aprRfcId" value="">
+  <div class="form-text">Selecciona el RFC de la empresa con el que se emitirá la factura.</div>
+</div>
 
 
 
@@ -325,13 +359,13 @@ $qs = $_GET; unset($qs['p']);
     <input type="hidden" name="id" id="aprId">
     <!-- 🔽 Nuevo input oculto para enviar la configuración de cobro -->
     <input type="hidden" name="billing_json" id="billingJson">
-    <button class="btn btn-success" id="btnApr">Aprobar</button>
+    <button class="btn btn-success" name="rfc_id" id="btnApr">Aprobar</button>
   </form>
 
   <form id="fRej" method="post" action="/Sistema-de-Saldos-y-Pagos-/Public/api/cotizacion_reject.php"
         onsubmit="return confirm('¿Rechazar esta cotización?');">
     <input type="hidden" name="id" id="rejId">
-    <button class="btn btn-outline-danger" id="btnRej">Rechazar</button>
+    <button class="btn btn-outline-danger" id="btnRej" disabled>Rechazar</button>
   </form>
 </div>
 <script>
@@ -566,6 +600,43 @@ $qs = $_GET; unset($qs['p']);
     }
   }
 
+   
+// ============= Cargar RFCs de la empresa desde la API ============= 
+async function loadCompanyRfcs(){
+  const u = '/Sistema-de-Saldos-y-Pagos-/Public/api/company_rfcs_list.php';
+  const r = await fetch(u, {cache:'no-store'});
+  if (!r.ok) throw new Error('No se pudieron cargar los RFCs');
+  const j = await r.json();
+  if (!j.ok) throw new Error(j.msg || 'Error al obtener RFCs');
+  return j.rows || [];
+}
+
+// Rellenar selector y control de estado del botón Aprobar
+function fillCompanyRfcSelector(rows, preselectId) {
+  const sel = document.getElementById('aprRfc');
+  const hid = document.getElementById('aprRfcId');
+  const btn = document.getElementById('btnApr');
+  if (!sel || !hid || !btn) return;
+
+  sel.innerHTML = '<option value="">Selecciona RFC emisor…</option>';
+  rows.forEach(r=>{
+    const opt = document.createElement('option');
+    opt.value = String(r.id);
+    opt.textContent = `${r.rfc} — ${r.razon_social}`;
+    sel.appendChild(opt);
+  });
+
+  if (preselectId) sel.value = String(preselectId);
+
+  function updateState(){
+    hid.value = sel.value || '';
+    btn.disabled = !hid.value; // solo habilita si hay rfc seleccionado
+  }
+  sel.addEventListener('change', updateState);
+  updateState();
+}
+
+
   // ============= Orquestación: abrir detalle =============
   async function openDetail(id){
     currentId    = id;
@@ -573,6 +644,15 @@ $qs = $_GET; unset($qs['p']);
     try{
       const d = await fetchCot(id);
       fillHeader(d); fillItems(d); fillTotals(d);
+
+       // cargar RFCs de la empresa
+      try {
+        const rfcs = await loadCompanyRfcs();
+        fillCompanyRfcSelector(rfcs, null); // null o si guardas último RFC usado puedes pasarlo
+          } catch(err) {
+           console.warn('No se cargaron RFCs:', err.message);
+           fillCompanyRfcSelector([], null);
+          }
 
       // Cierra el panel externo (tarjeta "Editar conceptos") por defecto
       const outer = $('#accEditPanel');

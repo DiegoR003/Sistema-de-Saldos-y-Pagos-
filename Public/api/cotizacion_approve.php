@@ -27,8 +27,19 @@ try{
   $overrides = json_decode($_POST['billing_json'] ?? '{}', true);
   if (!is_array($overrides)) $overrides = [];
 
+  // === RFC emisor (OBLIGATORIO) ===
+  // Debe venir del formulario (hidden aprRfcId) y existir en company_rfcs
+  $rfcId = (int)($_POST['rfc_id'] ?? 0);
+  if ($rfcId <= 0) back('Selecciona el RFC emisor antes de aprobar.', false);
+
   $pdo = db();
   $pdo->beginTransaction();
+
+  // valida que el RFC exista
+  $st = $pdo->prepare("SELECT id, rfc, razon_social FROM company_rfcs WHERE id = ? LIMIT 1");
+  $st->execute([$rfcId]);
+  $emisor = $st->fetch(PDO::FETCH_ASSOC);
+  if (!$emisor) back('RFC emisor inválido.', false);
 
   // 1) cotización
   $st = $pdo->prepare("SELECT * FROM cotizaciones WHERE id=? FOR UPDATE");
@@ -37,7 +48,7 @@ try{
   if (!$cot) back('Cotización no encontrada', false);
   if ($cot['estado']!=='pendiente') back('La cotización no está pendiente', false);
 
-  // 2) cliente
+  // 2) cliente (por correo)
   $st=$pdo->prepare("SELECT id FROM clientes WHERE correo=? LIMIT 1");
   $st->execute([$cot['correo']]);
   $clienteId = (int)$st->fetchColumn();
@@ -56,12 +67,21 @@ try{
   if ($periodicidadGlobal==='mensual')   $vence=date('Y-m-d',strtotime('+30 days'));
   if ($periodicidadGlobal==='bimestral') $vence=date('Y-m-d',strtotime('+60 days'));
 
-  $st=$pdo->prepare("INSERT INTO ordenes (cotizacion_id,cliente_id,total,saldo,estado,periodicidad,vence_en)
-                     VALUES (:cid,:clid,:tot,:sal,'activa',:per,:vence)");
+  // ✅ guardamos rfc_id en la orden
+  $st=$pdo->prepare("
+    INSERT INTO ordenes
+      (cotizacion_id, cliente_id, rfc_id, total, saldo, estado, periodicidad, vence_en)
+    VALUES
+      (:cid, :clid, :rfc, :tot, :sal, 'activa', :per, :vence)
+  ");
   $st->execute([
-    ':cid'=>$id, ':clid'=>$clienteId,
-    ':tot'=>(float)$cot['total'], ':sal'=>(float)$cot['total'],
-    ':per'=>$periodicidadGlobal, ':vence'=>$vence
+    ':cid'=>$id,
+    ':clid'=>$clienteId,
+    ':rfc'=>$rfcId,
+    ':tot'=>(float)$cot['total'],
+    ':sal'=>(float)$cot['total'],
+    ':per'=>$periodicidadGlobal,
+    ':vence'=>$vence
   ]);
   $ordenId=(int)$pdo->lastInsertId();
 
@@ -82,7 +102,7 @@ try{
     $monto = (float)($r['valor'] ?? 0);
     $concepto = trim(($r['grupo'] ?? '').' - '.($r['opcion'] ?? ''));
 
-    // defaults por reglas
+    // defaults por reglas (tu helper en App/billing_rules.php)
     [$bt,$iu,$ic,$nr] = infer_billing($r, $periodicidadGlobal);
 
     // override de UI si existe para este grupo
