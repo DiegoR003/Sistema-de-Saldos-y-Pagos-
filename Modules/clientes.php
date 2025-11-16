@@ -1,253 +1,255 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Clientes</title>
+<?php
+// Modules/clientes.php
+declare(strict_types=1);
 
-  <style>
-  /* ===== Clientes (estático) ===== */
-  .clientes .topbar{gap:.5rem;}
-  .clientes .search-card .card-body{padding:1rem;}
-  .clientes .search-card .form-control{height:44px;}
-  .clientes .search-card .btn-go{
-    height:44px;display:inline-flex;align-items:center;
-    background:#fdd835;border-color:#fdd835;color:#000;
-  }
-  .clientes .search-card .btn-go:hover{filter:brightness(.95);}
-  .clientes .card-header{font-weight:600;}
+require_once __DIR__ . '/../App/bd.php';
 
-  /* Acciones (estilo clásico) */
-  .clientes .btn-hist{background:#28a745;border-color:#28a745;color:#fff;}
-  .clientes .btn-det {background:#17a2b8;border-color:#17a2b8;color:#fff;}
-  .clientes .btn-edit{background:#f0ad4e;border-color:#f0ad4e;color:#111;}
-  .clientes .btn-del {background:#dc3545;border-color:#dc3545;color:#fff;}
-  .clientes .btn-sm  {padding:.25rem .5rem;}
+$pdo = db();
 
-  /* ===== Tabla normal (desktop) ===== */
-  .clientes table {width:100%;}
-  .clientes th, .clientes td {white-space:nowrap; vertical-align:middle;}
+/* =========================
+   Búsqueda
+   ========================= */
+$q = trim($_GET['q'] ?? '');
 
-  /* ===== Versión móvil: fila apilada tipo tarjeta ===== */
-  @media (max-width: 768px){
-    /* Oculta encabezados */
-    .clientes thead{position:absolute;left:-9999px;top:-9999px;}
+$where = "WHERE o.estado = 'activa'";
+$args  = [];
 
-    /* Cada fila es una "card" */
-    .clientes table,
-    .clientes tbody,
-    .clientes tr,
-    .clientes td {display:block;width:100%;}
-    .clientes tbody{display:block;}
-    .clientes tr{
-      background:#fff;
-      border:1px solid #e9ecef;
-      border-radius:.5rem;
-      padding:.5rem .75rem;
-      margin-bottom:.75rem;
-      box-shadow:0 1px 3px rgba(0,0,0,.04);
+if ($q !== '') {
+    // un solo named param :q
+    $where .= " AND (c.empresa LIKE :q OR c.correo LIKE :q OR c.telefono LIKE :q)";
+    $args[':q'] = "%{$q}%";
+}
+
+/* =========================
+   Consulta: clientes con órdenes activas
+   ========================= */
+/*
+   Tomamos:
+   - ordenes_activas: cuántas órdenes activas tiene el cliente
+   - mensual_base: suma de los montos recurrentes no pausados (estimado mensual)
+   - orden_id: alguna orden activa representativa (MIN id)
+   - periodicidad_activa: periodicidad de esa orden (unico/mensual/bimestral)
+   - billing_policy_activa: prepaid_anchor / fixed_day
+   - cut_day_activo: día de corte si aplica
+   - proxima_facturacion_activa: próxima fecha de facturación
+*/
+$sql = "
+SELECT
+  c.id,
+  c.empresa,
+  c.correo,
+  c.telefono,
+  MIN(o.creado_en) AS fecha_alta,
+  SUM(CASE WHEN o.estado = 'activa' THEN 1 ELSE 0 END) AS ordenes_activas,
+
+  COALESCE(SUM(CASE
+      WHEN o.estado = 'activa'
+           AND oi.billing_type = 'recurrente'
+           AND oi.pausado = 0
+      THEN oi.monto
+      ELSE 0
+  END), 0) AS mensual_base,
+
+  MIN(CASE WHEN o.estado = 'activa' THEN o.id END)                      AS orden_id,
+  MIN(CASE WHEN o.estado = 'activa' THEN o.periodicidad END)            AS periodicidad_activa,
+  MIN(CASE WHEN o.estado = 'activa' THEN o.billing_policy END)          AS billing_policy_activa,
+  MIN(CASE WHEN o.estado = 'activa' THEN o.cut_day END)                 AS cut_day_activo,
+  MIN(CASE WHEN o.estado = 'activa' THEN o.proxima_facturacion END)     AS proxima_facturacion_activa
+
+FROM clientes c
+JOIN ordenes o         ON o.cliente_id = c.id
+LEFT JOIN orden_items oi ON oi.orden_id = o.id
+{$where}
+GROUP BY c.id, c.empresa, c.correo, c.telefono
+ORDER BY c.empresa ASC
+";
+
+$st = $pdo->prepare($sql);
+$st->execute($args);
+$rows = $st->fetchAll(PDO::FETCH_ASSOC);
+
+function money_mx($v): string {
+    return '$' . number_format((float)$v, 2, '.', ',');
+}
+
+/**
+ * Periodo de facturación bonito
+ */
+function prettify_periodo(array $r): string {
+    $per  = $r['periodicidad_activa'] ?? '';
+    $pol  = $r['billing_policy_activa'] ?? '';
+    $cut  = $r['cut_day_activo'] ?? null;
+
+    switch ($per) {
+        case 'mensual':   $base = 'Mensual';   break;
+        case 'bimestral': $base = 'Bimestral'; break;
+        case 'unico':     $base = 'Único';     break;
+        default:          $base = '—';         break;
     }
 
-    /* Cada celda: etiqueta a la izquierda, valor a la derecha */
-    .clientes td{
-      border:0;
-      border-bottom:1px solid #f1f3f5;
-      position:relative;
-      padding:.5rem 0 .5rem 7.5rem;    /* espacio para la etiqueta */
-      white-space:normal;              /* permite saltos de línea */
-      text-align:right;
-    }
-    .clientes td:last-child{border-bottom:0;}
+    if ($base === '—') return $base;
 
-    .clientes td::before{
-      content:attr(data-label);
-      position:absolute;
-      left:.75rem; top:.5rem;
-      width:6.5rem;
-      font-weight:600;
-      color:#6b7280;
-      text-align:left;
-      white-space:normal;
+    // detalles de política de facturación
+    $detalle = '';
+    if ($pol === 'fixed_day' && $cut) {
+        $detalle = "corte día " . (int)$cut;
+    } elseif ($pol === 'prepaid_anchor') {
+        $detalle = "prepago";
     }
 
-    /* Acciones: en fila, con wrap si hace falta */
-    .clientes .actions{
-      display:flex; gap:.35rem; flex-wrap:wrap; justify-content:flex-end;
-    }
+    return $detalle ? "{$base} ({$detalle})" : $base;
+}
 
-    /* Quita padding extra al contenedor Bootstrap si existiera */
-    .clientes .table-wrap{overflow:visible;}
-  }
-  </style>
-</head>
-<body>
+/**
+ * Formato corto para fecha
+ */
+function fmt_date(?string $d): string {
+    if (!$d) return '—';
+    $ts = strtotime($d);
+    if (!$ts) return '—';
+    return date('d/m/Y', $ts);
+}
+?>
 
-<div class="container-fluid clientes">
-  <div class="d-flex align-items-center justify-content-between flex-wrap topbar mb-3">
-    <h3 class="mb-0 fw-semibold">Clientes</h3>
+<style>
+.clientes-page h3 {
+  font-weight: 600;
+}
 
-    <div class="d-flex align-items-center gap-2">
-      <div class="dropdown">
-        <button class="btn btn-light border dropdown-toggle" data-bs-toggle="dropdown" type="button">
-          Mostrar
-        </button>
-        <ul class="dropdown-menu dropdown-menu-end">
-          <li><a class="dropdown-item" href="#">10</a></li>
-          <li><a class="dropdown-item" href="#">25</a></li>
-          <li><a class="dropdown-item" href="#">50</a></li>
-        </ul>
-      </div>
+.clientes-page .search-card .card-body { padding: 1rem; }
+.clientes-page .search-card .form-control { height: 44px; }
+.clientes-page .search-card .btn-search {
+  height: 44px;
+  display: inline-flex;
+  align-items: center;
+  background: #e74c3c;
+  border-color: #e74c3c;
+}
+.clientes-page .search-card .btn-search:hover {
+  background: #d83e2e;
+  border-color: #d83e2e;
+}
 
-      <button class="btn btn-primary btn-sm">
-        <i class="bi bi-plus-lg me-1"></i> Nuevo
+.clientes-page .estado-badge {
+  font-size: .75rem;
+  font-weight: 600;
+  border-radius: 999px;
+  padding: .15rem .6rem;
+}
+
+.clientes-page .estado-activo {
+  background:#28a745;
+  color:#fff;
+}
+
+.clientes-page .estado-sin-orden {
+  background:#6c757d;
+  color:#fff;
+}
+</style>
+
+<div class="container-fluid clientes-page">
+
+  <div class="d-flex align-items-center justify-content-between mb-3">
+    <h3 class="mb-0">Clientes</h3>
+
+    <div class="dropdown">
+      <button class="btn btn-light border dropdown-toggle" type="button" data-bs-toggle="dropdown">
+        Mostrar
       </button>
+      <ul class="dropdown-menu dropdown-menu-end">
+        <li><a class="dropdown-item" href="?m=clientes">Todos</a></li>
+      </ul>
     </div>
   </div>
 
   <!-- Buscador -->
   <div class="card border-0 shadow-sm search-card mb-3">
     <div class="card-body">
-      <div class="input-group">
-        <input id="cliQuery" type="text" class="form-control" placeholder="Nombre">
-        <button id="cliGo" class="btn btn-go" type="button">
-          <i class="bi bi-search me-1"></i> Buscar!
+      <form class="input-group" action="/Sistema-de-Saldos-y-Pagos-/Public/index.php" method="get">
+        <input type="hidden" name="m" value="clientes">
+        <input type="text"
+               class="form-control"
+               name="q"
+               placeholder="Nombre, correo o teléfono…"
+               value="<?= htmlspecialchars($q) ?>">
+        <button class="btn btn-danger btn-search" type="submit">
+          <i class="bi bi-search me-1"></i> Buscar
         </button>
-      </div>
+      </form>
     </div>
   </div>
 
-  <!-- Tabla / Cards responsive -->
+  <!-- Tabla de clientes en proceso -->
   <div class="card border-0 shadow-sm">
-    <div class="card-header bg-white">
-      Historial de Clientes
-    </div>
+    <div class="card-body">
+      <h5 class="mb-3">Historial de Clientes en proceso</h5>
 
-    <div class="table-wrap">
-      <table class="table align-middle mb-0" id="cliTable">
-        <thead class="table-light">
-          <tr>
-            <th>Cliente</th>
-            <th>RFC</th>
-            <th>Dirección</th>
-            <th>Teléfono</th>
-            <th>Fecha Mensualidad</th>
-            <th>Servicio</th>
-            <th>Estado</th>
-            <th class="text-end">Acciones</th>
-          </tr>
-        </thead>
-        <tbody>
-          <!-- Filas de ejemplo -->
-          <tr>
-            <td data-label="Cliente" class="cli-name">Ismael Jose</td>
-            <td data-label="RFC">54asdas46d5</td>
-            <td data-label="Dirección">asdasd</td>
-            <td data-label="Teléfono">6546543235453</td>
-            <td data-label="Fecha Mensualidad">20/02/2019</td>
-            <td data-label="Servicio">Marketing $2000.00</td>
-            <td data-label="Estado"><span class="badge bg-success">Activo</span></td>
-            <td data-label="Acciones">
-              <div class="actions text-end">
-                <button class="btn btn-sm btn-hist">Historial</button>
-                <button class="btn btn-sm btn-det">Detalles</button>
-                <button class="btn btn-sm btn-edit">Editar</button>
-                <button class="btn btn-sm btn-del" onclick="fakeDelete('amner')">Eliminar</button>
-              </div>
-            </td>
-          </tr>
+      <?php if (!$rows): ?>
+        <div class="alert alert-info mb-0">
+          Aún no hay clientes con órdenes activas (o no hay coincidencias con la búsqueda).
+        </div>
+      <?php else: ?>
 
-          <tr>
-            <td data-label="Cliente" class="cli-name">Omar Cano</td>
-            <td data-label="RFC">645646</td>
-            <td data-label="Dirección">guatemala</td>
-            <td data-label="Teléfono">498932133453</td>
-            <td data-label="Fecha Mensualidad">12/01/2019</td>
-            <td data-label="Servicio">Web Service $3000.00</td>
-            <td data-label="Estado"><span class="badge bg-secondary">Inactivo</span></td>
-            <td data-label="Acciones">
-              <div class="actions text-end">
-                <button class="btn btn-sm btn-hist">Historial</button>
-                <button class="btn btn-sm btn-det">Detalles</button>
-                <button class="btn btn-sm btn-edit">Editar</button>
-                <button class="btn btn-sm btn-del" onclick="fakeDelete('Amner')">Eliminar</button>
-              </div>
-            </td>
-          </tr>
+      <div class="table-responsive">
+        <table class="table align-middle mb-0">
+          <thead>
+            <tr>
+              <th>Cliente</th>
+              <th>Correo</th>
+              <th>Teléfono</th>
+              <th>Servicio</th>
+              <th>Periodo</th>
+              <th>Próx. facturación</th>
+              <th>Estado</th>
+              <th class="text-end">Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+          <?php foreach ($rows as $r): 
+            $activo        = (int)$r['ordenes_activas'] > 0;
+            $montoMensual  = (float)$r['mensual_base'];
+            $periodoTxt    = prettify_periodo($r);
+            $proximaTxt    = fmt_date($r['proxima_facturacion_activa'] ?? null);
+          ?>
+            <tr>
+              <td><?= htmlspecialchars($r['empresa']) ?></td>
+              <td><?= htmlspecialchars($r['correo']) ?></td>
+              <td><?= htmlspecialchars($r['telefono'] ?? '—') ?></td>
+              <td>
+                <?php if ($montoMensual > 0): ?>
+                  Mensual <?= money_mx($montoMensual) ?>
+                <?php else: ?>
+                  —
+                <?php endif; ?>
+              </td>
+              <td><?= htmlspecialchars($periodoTxt) ?></td>
+              <td><?= htmlspecialchars($proximaTxt) ?></td>
+              <td>
+                <?php if ($activo): ?>
+                  <span class="estado-badge estado-activo">Activo</span>
+                <?php else: ?>
+                  <span class="estado-badge estado-sin-orden">Sin orden activa</span>
+                <?php endif; ?>
+              </td>
+              <td class="text-end">
+                <?php if (!empty($r['orden_id'])): ?>
+                  <a href="/Sistema-de-Saldos-y-Pagos-/Public/index.php?m=cobro&orden_id=<?= (int)$r['orden_id'] ?>"
+                     class="btn btn-primary btn-sm">
+                    Cobrar
+                  </a>
+                <?php else: ?>
+                  <span class="text-muted small">Sin orden activa</span>
+                <?php endif; ?>
+              </td>
+            </tr>
+          <?php endforeach; ?>
+          </tbody>
+        </table>
+      </div>
 
-          <tr>
-            <td data-label="Cliente" class="cli-name">Leonel Marquez</td>
-            <td data-label="RFC">351435431</td>
-            <td data-label="Dirección">guatemala</td>
-            <td data-label="Teléfono">0165132</td>
-            <td data-label="Fecha Mensualidad">05/11/2018</td>
-            <td data-label="Servicio">Studio $1000.00</td>
-            <td data-label="Estado"><span class="badge bg-success">Activo</span></td>
-            <td data-label="Acciones">
-              <div class="actions text-end">
-                <button class="btn btn-sm btn-hist">Historial</button>
-                <button class="btn btn-sm btn-det">Detalles</button>
-                <button class="btn btn-sm btn-edit">Editar</button>
-                <button class="btn btn-sm btn-del" onclick="fakeDelete('Amado Saucedo')">Eliminar</button>
-              </div>
-            </td>
-          </tr>
-
-          <tr>
-            <td data-label="Cliente" class="cli-name">dayana Lorena</td>
-            <td data-label="RFC">34533132</td>
-            <td data-label="Dirección">coban</td>
-            <td data-label="Teléfono">49893213313</td>
-            <td data-label="Fecha Mensualidad">01/12/2018</td>
-            <td data-label="Servicio">Marketing $3000.00</td>
-            <td data-label="Estado"><span class="badge bg-success">Activo</span></td>
-            <td data-label="Acciones">
-              <div class="actions text-end">
-                <button class="btn btn-sm btn-hist">Historial</button>
-                <button class="btn btn-sm btn-det">Detalles</button>
-                <button class="btn btn-sm btn-edit">Editar</button>
-                <button class="btn btn-sm btn-del" onclick="fakeDelete('dayana saucedo')">Eliminar</button>
-              </div>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-
-    <!-- Paginación simulada -->
-    <div class="card-body d-flex flex-wrap justify-content-between align-items-center gap-2">
-      <small class="text-muted">Mostrando 1 a 4 de 4 registros</small>
-      <ul class="pagination pagination-sm m-0">
-        <li class="page-item disabled"><span class="page-link">Anterior</span></li>
-        <li class="page-item active"><span class="page-link">1</span></li>
-        <li class="page-item disabled"><span class="page-link">Siguiente</span></li>
-      </ul>
+      <?php endif; ?>
     </div>
   </div>
+
 </div>
-
-<script>
-  // Filtro por nombre (front-end)
-  (function(){
-    const q   = document.getElementById('cliQuery');
-    const btn = document.getElementById('cliGo');
-    const rows = Array.from(document.querySelectorAll('#cliTable tbody tr'));
-
-    function filtrar(){
-      const term = (q.value || '').toLowerCase().trim();
-      rows.forEach(r => {
-        const name = r.querySelector('.cli-name').textContent.toLowerCase();
-        r.style.display = name.includes(term) ? '' : 'none';
-      });
-    }
-
-    q.addEventListener('input', filtrar);
-    btn.addEventListener('click', filtrar);
-  })();
-
-  function fakeDelete(name){
-    alert('Solo demo (front-end): aquí confirmarías la eliminación de "'+name+'".');
-  }
-</script>
-
-</body>
-</html>

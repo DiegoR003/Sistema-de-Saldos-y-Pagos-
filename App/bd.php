@@ -6,7 +6,7 @@ function db(): PDO {
   static $pdo;
   if ($pdo) return $pdo;
 
-  // Ajusta estos valores si tu MySQL usa otro puerto o credenciales
+  // Ajustar estos valores si tu MySQL usa otro puerto o credenciales
   $DB_HOST = '127.0.0.1';  // o 'localhost'
   $DB_PORT = '3306';       // puerto de MySQL en WAMP (cambiar en donde se use el sistema)
   $DB_NAME = 'sistema_pagos_saldos_banana';
