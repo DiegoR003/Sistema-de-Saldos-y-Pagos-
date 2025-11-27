@@ -27,10 +27,21 @@ try{
   $overrides = json_decode($_POST['billing_json'] ?? '{}', true);
   if (!is_array($overrides)) $overrides = [];
 
+ 
+
+
   // === RFC emisor (OBLIGATORIO) ===
   // Debe venir del formulario (hidden aprRfcId) y existir en company_rfcs
-  $rfcId = (int)($_POST['rfc_id'] ?? 0);
-  if ($rfcId <= 0) back('Selecciona el RFC emisor antes de aprobar.', false);
+ $rfcId = 0;
+if (isset($_POST['rfc_id'])) {
+    $rfcId = (int)$_POST['rfc_id'];
+} elseif (isset($_POST['aprRfcId'])) {
+    $rfcId = (int)$_POST['aprRfcId'];
+}
+
+if ($rfcId <= 0) {
+  back('Selecciona el RFC emisor antes de aprobar.', false);
+}
 
   $pdo = db();
   $pdo->beginTransaction();

@@ -176,11 +176,16 @@ try {
 
   // 4) Registrar pago
   $insPay = $pdo->prepare("
-    INSERT INTO pagos (orden_id, monto, metodo, referencia)
-    VALUES (?,?,?,?)
-  ");
-  $insPay->execute([$ordenId, $montoPago, $metodo, $referencia]);
-
+  INSERT INTO pagos (orden_id, cargo_id, monto, metodo, referencia)
+  VALUES (?,?,?,?,?)
+");
+$insPay->execute([
+  $ordenId,
+  $cargoId,                            // <--- muy importante
+  money_round($montoPago),
+  $metodo,
+  $referencia
+]);
   // 5) Marcar cargo como pagado (por id y por periodo)
   $pdo->prepare("UPDATE cargos SET estatus = 'pagado' WHERE id = ?")
       ->execute([$cargoId]);

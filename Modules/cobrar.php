@@ -29,15 +29,28 @@ SELECT
 
   COALESCE(SUM(CASE
     WHEN oi.billing_type='recurrente' AND oi.pausado=0 THEN oi.monto
-    ELSE 0 END),0)                                    AS mensual_base
+    ELSE 0 END),0)                                    AS mensual_base,
+
+  -- cuantos cargos pagados tiene esta orden
+  COALESCE(SUM(CASE
+    WHEN cg.estatus='pagado' THEN 1
+    ELSE 0 END),0)                                    AS cargos_pagados,
+
+  -- cuantos cargos NO pagados (emitidos / pendientes) tiene
+  COALESCE(SUM(CASE
+    WHEN cg.id IS NOT NULL AND cg.estatus <> 'pagado' THEN 1
+    ELSE 0 END),0)                                    AS cargos_pendientes
+
 FROM ordenes o
 JOIN clientes c          ON c.id = o.cliente_id
 LEFT JOIN orden_items oi ON oi.orden_id = o.id
+LEFT JOIN cargos cg      ON cg.orden_id = o.id
 {$where}
 GROUP BY o.id
 ORDER BY ANY_VALUE(c.empresa) ASC
 LIMIT 200
 ";
+
 
 $st = $pdo->prepare($sql);
 $st->execute($params);
@@ -146,11 +159,25 @@ $finMes   = $finMesDT->format('Y-m-d');
       $resumenServicios = servicios_resumen($pdo, (int)$r['orden_id'], 2);
 
       // badge de estado según proxima_facturacion (simple)
-      $badgeTxt = 'Nuevo'; $badgeClass='secondary';
-      if (!empty($r['proxima_facturacion'])) {
-        $prox = new DateTimeImmutable($r['proxima_facturacion']);
-        if ($prox < $hoy) { $badgeTxt='Vencida'; $badgeClass='danger'; }
-        else              { $badgeTxt='Al día';  $badgeClass='success'; }
+       // Estado de pago según cargos (pagados / pendientes)
+      $pagados    = (int)$r['cargos_pagados'];
+      $pendientes = (int)$r['cargos_pendientes'];
+
+      $badgeTxt   = 'Nuevo';
+      $badgeClass = 'secondary';
+
+      if ($pagados === 0 && $pendientes === 0) {
+        // nunca se ha emitido/pagado nada: Nuevo (gris)
+        $badgeTxt   = 'Nuevo';
+        $badgeClass = 'secondary';
+      } elseif ($pendientes === 0 && $pagados > 0) {
+        // tiene cargos y todos están pagados
+        $badgeTxt   = 'Al corriente';
+        $badgeClass = 'success';
+      } else {
+        // tiene al menos un cargo emitido o mixto pagado+emitido
+        $badgeTxt   = 'En servicio';
+        $badgeClass = 'primary';
       }
     ?>
     <div class="card border-0 shadow-sm cliente-card">

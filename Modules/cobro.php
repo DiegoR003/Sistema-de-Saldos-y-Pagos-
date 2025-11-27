@@ -79,11 +79,14 @@ $st->execute([$ordenId, $desde, $hasta]);
 $cargos = $st->fetchAll(PDO::FETCH_ASSOC);
 
 // Indexar cargos por mes (1..12)
+
 $byMonth = array_fill(1, 12, null);
 foreach ($cargos as $cg) {
-  $m = (int)date('n', strtotime($cg['periodo_inicio']));
-  $byMonth[$m] = $cg;
+    $fechaBase = $cg['periodo_fin'] ?? $cg['periodo_inicio'];
+    $m = (int)date('n', strtotime($fechaBase));
+    $byMonth[$m] = $cg;
 }
+
 
 // --- Obtener items de la orden (SERVICIOS) ---
 $st = $pdo->prepare("
@@ -634,25 +637,34 @@ $vistaRapidaTxt = $vistaRapida ? implode(' · ', $vistaRapida) : '—';
               <select class="form-select mb-3" id="selPeriodo" name="periodo_mes" required>
                 <option value="">Elige un mes…</option>
                 <?php for ($m=$mesInicio; $m<=12; $m++):
-                  $cg = $byMonth[$m];
-                  $estatus = $cg['estatus'] ?? 'pendiente';
-                  $start = new DateTimeImmutable(sprintf('%04d-%02d-01', $anio, $m));
-                  $fin   = end_by_interval($start, 'mensual', 1);
-                  $cargoId = $cg['id'] ?? '';
-                  $totalMes = isset($cg) ? (float)$cg['total'] : $estimadoConIVA;
-                  $disabled = ($estatus === 'pagado') ? 'disabled' : '';
-                ?>
-                <option
-                  value="<?= $m ?>"
-                  data-cargo-id="<?= htmlspecialchars((string)$cargoId) ?>"
-                  data-inicio="<?= $start->format('Y-m-d') ?>"
-                  data-fin="<?= $fin->format('Y-m-d') ?>"
-                  data-total="<?= number_format($totalMes,2,'.','') ?>"
-                  <?= $disabled ?>
-                >
-                  <?= $MESN[$m] ?> <?= isset($cg) ? '('.$estatus.')' : '' ?>
-                </option>
-                <?php endfor; ?>
+  $cg = $byMonth[$m];
+
+  // Estatus “real” de la BD
+  $estatusBD = $cg['estatus'] ?? null;
+
+  // Para la UI solo queremos: pagado / pendiente
+  $estatusUI = ($estatusBD === 'pagado') ? 'pagado' : 'pendiente';
+
+  $start = new DateTimeImmutable(sprintf('%04d-%02d-01', $anio, $m));
+  $fin   = end_by_interval($start, 'mensual', 1);
+  $cargoId = $cg['id'] ?? '';
+  $totalMes = isset($cg) ? (float)$cg['total'] : $estimadoConIVA;
+
+  // Solo deshabilitamos si ya está pagado
+  $disabled = ($estatusUI === 'pagado') ? 'disabled' : '';
+?>
+<option
+  value="<?= $m ?>"
+  data-cargo-id="<?= htmlspecialchars((string)$cargoId) ?>"
+  data-inicio="<?= $start->format('Y-m-d') ?>"
+  data-fin="<?= $fin->format('Y-m-d') ?>"
+  data-total="<?= number_format($totalMes,2,'.','') ?>"
+  <?= $disabled ?>
+>
+  <?= $MESN[$m] ?> <?= isset($cg) ? '('.$estatusUI.')' : '' ?>
+</option>
+<?php endfor; ?>
+
               </select>
 
               <label class="form-label fw-semibold">Método de pago</label>
@@ -712,18 +724,22 @@ $vistaRapidaTxt = $vistaRapida ? implode(' · ', $vistaRapida) : '—';
 
       <div class="row g-2">
         <?php for($m=$mesInicio; $m<=12; $m++):
-          $cg = $byMonth[$m];
-          $estatus = $cg['estatus'] ?? 'pendiente';
-          $badgeTxt   = ($estatus==='pagado'?'Pagado':($estatus==='emitido'?'Emitido':'Pendiente'));
-          $badgeClass = ($estatus==='pagado'?'success':($estatus==='emitido'?'info':'warning'));
-        ?>
-        <div class="col-6 col-md-4 col-lg-3 col-xl-2">
-          <div class="px-2 py-2 d-flex justify-content-between align-items-center month-tile">
-            <span class="fw-semibold"><?= $MESN[$m] ?></span>
-            <span class="badge text-bg-<?= $badgeClass ?>"><?= $badgeTxt ?></span>
-          </div>
-        </div>
-        <?php endfor; ?>
+  $cg = $byMonth[$m];
+  $estatusBD = $cg['estatus'] ?? null;
+
+  // UI solo: pagado / pendiente
+  $estatusUI  = ($estatusBD === 'pagado') ? 'pagado' : 'pendiente';
+  $badgeTxt   = ($estatusUI === 'pagado') ? 'Pagado' : 'Pendiente';
+  $badgeClass = ($estatusUI === 'pagado') ? 'success' : 'warning';
+?>
+  <div class="col-6 col-md-4 col-lg-3 col-xl-2">
+    <div class="px-2 py-2 d-flex justify-content-between align-items-center month-tile">
+      <span class="fw-semibold"><?= $MESN[$m] ?></span>
+      <span class="badge text-bg-<?= $badgeClass ?>"><?= $badgeTxt ?></span>
+    </div>
+  </div>
+<?php endfor; ?>
+
       </div>
     </div>
   </div>

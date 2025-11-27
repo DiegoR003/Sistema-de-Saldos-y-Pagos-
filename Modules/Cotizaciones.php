@@ -353,13 +353,14 @@ $qs = $_GET; unset($qs['p']);
 
 
 
-   <div class="d-grid gap-2">
+  <div class="d-grid gap-2">
   <form id="fApr" method="post" action="/Sistema-de-Saldos-y-Pagos-/Public/api/cotizacion_approve.php"
-        onsubmit="return confirm('¿Aprobar esta cotización?');">
+        onsubmit="return confirmarAprobacion();">
     <input type="hidden" name="id" id="aprId">
-    <!-- 🔽 Nuevo input oculto para enviar la configuración de cobro -->
     <input type="hidden" name="billing_json" id="billingJson">
-    <button class="btn btn-success" name="rfc_id" id="btnApr">Aprobar</button>
+    <!-- ✅ Este es el input que debe tener el valor del RFC -->
+    <input type="hidden" name="rfc_id" id="aprRfcIdHidden">
+    <button class="btn btn-success" id="btnApr" type="submit">Aprobar</button>
   </form>
 
   <form id="fRej" method="post" action="/Sistema-de-Saldos-y-Pagos-/Public/api/cotizacion_reject.php"
@@ -615,8 +616,9 @@ async function loadCompanyRfcs(){
 function fillCompanyRfcSelector(rows, preselectId) {
   const sel = document.getElementById('aprRfc');
   const hid = document.getElementById('aprRfcId');
+  const hidForm = document.getElementById('aprRfcIdHidden'); // ✅ NUEVO
   const btn = document.getElementById('btnApr');
-  if (!sel || !hid || !btn) return;
+  if (!sel || !hid || !hidForm || !btn) return;
 
   sel.innerHTML = '<option value="">Selecciona RFC emisor…</option>';
   rows.forEach(r=>{
@@ -629,12 +631,24 @@ function fillCompanyRfcSelector(rows, preselectId) {
   if (preselectId) sel.value = String(preselectId);
 
   function updateState(){
-    hid.value = sel.value || '';
-    btn.disabled = !hid.value; // solo habilita si hay rfc seleccionado
+    const val = sel.value || '';
+    hid.value = val;
+    hidForm.value = val; // ✅ ACTUALIZA EL HIDDEN DEL FORM
+    btn.disabled = !val; // solo habilita si hay rfc seleccionado
   }
   sel.addEventListener('change', updateState);
   updateState();
 }
+
+// ✅ Función de confirmación que valida el RFC antes de enviar
+window.confirmarAprobacion = function() {
+  const rfcId = document.getElementById('aprRfcIdHidden')?.value;
+  if (!rfcId) {
+    alert('Por favor selecciona el RFC emisor antes de aprobar.');
+    return false;
+  }
+  return confirm('¿Aprobar esta cotización?');
+};
 
 
   // ============= Orquestación: abrir detalle =============
