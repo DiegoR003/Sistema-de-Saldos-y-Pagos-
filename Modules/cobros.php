@@ -1,12 +1,112 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Cobros</title>
+<?php
+// Modules/cobros.php
+require_once __DIR__ . '/../App/bd.php';
+$pdo = db();
 
-  <style>
-  /* ===== Cobros (estático) ===== */
+/* =========================
+   Filtro por cliente
+   ========================= */
+$clienteId = (int)($_GET['cliente_id'] ?? 0);
+
+/* =========================
+   Lista de clientes que tienen pagos
+   ========================= */
+$stCli = $pdo->query("
+  SELECT DISTINCT c.id, c.empresa
+  FROM cargos cg
+  JOIN ordenes o ON o.id = cg.orden_id
+  JOIN clientes c ON c.id = o.cliente_id
+  ORDER BY c.empresa
+");
+$clientes = $stCli->fetchAll(PDO::FETCH_ASSOC);
+
+/* =========================
+   Consulta de cobros
+   ========================= */
+$where = "WHERE 1=1";
+$args  = [];
+
+if ($clienteId > 0) {
+    $where .= " AND c.id = :cid";
+    $args[':cid'] = $clienteId;
+}
+
+$sql = "
+SELECT
+  cg.id,
+  LPAD(cg.id, 6, '0')                            AS folio,
+  cg.periodo_inicio,
+  cg.periodo_fin,
+  cg.total,
+  cg.estatus                                      AS estatus_cargo,
+
+  c.empresa                                       AS cliente,
+
+  -- servicios del cargo (desde la orden)
+  GROUP_CONCAT(DISTINCT oi.concepto
+               ORDER BY oi.id
+               SEPARATOR '||')                    AS items_raw,
+  COUNT(DISTINCT oi.id)                          AS items_count,
+
+  -- info del último pago (si existe)
+  MAX(p.metodo)                                  AS pago_metodo,
+  MAX(p.referencia)                              AS pago_ref,
+  MAX(p.creado_en)                               AS pago_fecha
+
+FROM cargos cg
+JOIN ordenes o      ON o.id = cg.orden_id
+JOIN clientes c     ON c.id = o.cliente_id
+LEFT JOIN orden_items oi ON oi.orden_id = o.id
+LEFT JOIN pagos p        ON p.id = cg.id
+{$where}
+GROUP BY
+  cg.id, cg.periodo_inicio, cg.periodo_fin, cg.total, cg.estatus,
+  c.empresa
+ORDER BY cg.periodo_inicio DESC
+";
+
+
+
+$st = $pdo->prepare($sql);
+$st->execute($args);
+$rows = $st->fetchAll(PDO::FETCH_ASSOC);
+
+function money_mx($v){ return '$'.number_format((float)$v, 2, '.', ','); }
+function fmt_date($d){ return date('Y-m-d', strtotime($d)); }
+
+/**
+ * Comprime la lista de servicios tipo:
+ *   "cuenta - 1575, publicaciones - 2363, ..." -> "cuenta - 1575 · publicaciones - 2363 · +9 más"
+ */
+function compress_paquete(string $itemsRaw, int $itemsCount, int $max = 2): string {
+    if ($itemsCount <= 0 || $itemsRaw === '') {
+        return '—';
+    }
+
+    // reconstruimos la lista desde el GROUP_CONCAT
+    $items = explode('||', $itemsRaw);
+
+    // por si acaso hay diferencia entre COUNT y el explode
+    $itemsCount = max($itemsCount, count($items));
+
+    // tomamos solo los primeros $max
+    $preview = array_slice($items, 0, $max);
+
+    // limpiamos espacios
+    $preview = array_map('trim', $preview);
+
+    $extra = $itemsCount - count($preview);
+
+    $txt = implode(' · ', $preview);
+    if ($extra > 0) {
+        $txt .= " · +{$extra} más";
+    }
+    return $txt;
+}
+?>
+
+<style>
+  /* ===== Cobros (mismo estilo que tenías) ===== */
   .cobros .topbar{gap:.5rem;}
   .cobros .filters .form-select,
   .cobros .filters .form-control{height:44px;}
@@ -57,9 +157,7 @@
     .cobros .table-wrap{overflow:visible;}
     .cobros .text-end{justify-content:flex-end;}
   }
-  </style>
-</head>
-<body>
+</style>
 
 <div class="container-fluid cobros">
   <!-- Título + acciones -->
@@ -67,7 +165,6 @@
     <h3 class="mb-0 fw-semibold">Cobros</h3>
 
     <div class="d-flex align-items-center gap-2">
-      <!-- “Mostrar” solo decorativo -->
       <div class="dropdown">
         <button class="btn btn-light border dropdown-toggle" data-bs-toggle="dropdown" type="button">
           Mostrar
@@ -84,23 +181,33 @@
   <!-- Filtros -->
   <div class="card border-0 shadow-sm mb-3">
     <div class="card-body filters">
-      <div class="row g-2 align-items-center">
+      <form class="row g-2 align-items-center"
+            method="get"
+            action="/Sistema-de-Saldos-y-Pagos-/Public/index.php">
+        <input type="hidden" name="m" value="cobros">
+
         <div class="col-12 col-md-6">
-          <select id="cliSelect" class="form-select">
+          <select name="cliente_id" class="form-select">
             <option value="">--Selecciona Cliente--</option>
-            <option value="amner">Ismael Jose</option>
-            <option value="amado saucedo">Omar Cano</option>
-            <option value="dayana saucedo">Leonel Marquez</option>
+            <?php foreach ($clientes as $cli): ?>
+              <option value="<?= (int)$cli['id'] ?>"
+                <?= $clienteId === (int)$cli['id'] ? 'selected' : '' ?>>
+                <?= htmlspecialchars($cli['empresa']) ?>
+              </option>
+            <?php endforeach; ?>
           </select>
         </div>
+
         <div class="col-12 col-md-2 d-grid">
-          <button id="btnGo" class="btn btn-go"><i class="bi bi-search me-1"></i> Buscar!</button>
+          <button class="btn btn-go" type="submit">
+            <i class="bi bi-search me-1"></i> Buscar!
+          </button>
         </div>
-      </div>
+      </form>
     </div>
   </div>
 
-  <!-- Tabla -->
+  <!-- Tabla de cobros -->
   <div class="card border-0 shadow-sm">
     <div class="card-header bg-white">
       Historial de Cobros
@@ -121,39 +228,57 @@
           </tr>
         </thead>
         <tbody>
-          <!-- Filas de ejemplo (estático) -->
+        <?php if (!$rows): ?>
           <tr>
-            <td data-label="Folio"><a href="#" class="text-decoration-none">000047</a></td>
-            <td data-label="Cliente" class="cli-name"><a href="#" class="text-decoration-none">Ismael Jose</a></td>
-            <td data-label="Paquete">Web Service</td>
-            <td data-label="Fecha" class="date-val">2019-01-05</td>
-            <td data-label="Importe" class="amt-val">20.00</td>
-            <td data-label="Método de pago" class="met-val">Efectivo</td>
-            <td data-label="# Depósito">—</td>
-            <td data-label="Acción" class="text-end">
-              <button class="btn btn-sm btn-cancel">Cancelar</button>
+            <td colspan="8" class="text-center text-muted">
+              Aún no hay cobros registrados.
             </td>
           </tr>
+        <?php else: ?>
+        <?php foreach ($rows as $r): 
+  $paquete   = compress_paquete($r['items_raw'] ?? '', (int)$r['items_count']);
+  $fechaTxt  = fmt_date($r['periodo_inicio']);
+  $importe   = money_mx($r['total']);
+  $metodo    = $r['pago_metodo'] ?: '—';
+  $ref       = $r['pago_ref'] ?: '—';
 
-          <tr>
-            <td data-label="Folio"><a href="#" class="text-decoration-none">000046</a></td>
-            <td data-label="Cliente" class="cli-name"><a href="#" class="text-decoration-none">Omar Cano</a></td>
-            <td data-label="Paquete">Studio</td>
-            <td data-label="Fecha" class="date-val">2019-01-05</td>
-            <td data-label="Importe" class="amt-val">45.00</td>
-            <td data-label="Método de pago" class="met-val">Efectivo</td>
-            <td data-label="# Depósito">—</td>
-            <td data-label="Acción" class="text-end">
-              <button class="btn btn-sm btn-cancel">Cancelar</button>
-            </td>
-          </tr>
+  $estatus   = $r['estatus_cargo'] ?? 'pendiente'; // emitido / pagado / pendiente
+?>
+<tr>
+  <td data-label="Folio">
+    <a href="#" class="text-decoration-none"><?= htmlspecialchars($r['folio']) ?></a>
+  </td>
+  <td data-label="Cliente" class="cli-name">
+    <a href="#" class="text-decoration-none"><?= htmlspecialchars($r['cliente']) ?></a>
+  </td>
+  <td data-label="Paquete">
+    <?= htmlspecialchars($paquete) ?>
+  </td>
+  <td data-label="Fecha"><?= htmlspecialchars($fechaTxt) ?></td>
+  <td data-label="Importe"><?= $importe ?></td>
+  <td data-label="Método de pago"><?= htmlspecialchars($metodo) ?></td>
+  <td data-label="# Depósito"><?= htmlspecialchars($ref) ?></td>
+  <td data-label="Acción" class="text-end">
+    <span class="badge 
+      <?= $estatus === 'pagado' ? 'text-bg-success' : ($estatus === 'emitido' ? 'text-bg-info' : 'text-bg-warning') ?>">
+      <?= htmlspecialchars($estatus) ?>
+    </span>
+  </td>
+</tr>
+<?php endforeach; ?>
+
+
+        <?php endif; ?>
         </tbody>
       </table>
     </div>
 
-    <!-- Paginación simulada -->
+    <!-- Paginación simple (decorativa por ahora) -->
     <div class="card-body d-flex flex-wrap justify-content-between align-items-center gap-2">
-      <small class="text-muted" id="lblCount">Mostrando 1 a 2 de 2 registros</small>
+      <?php $total = count($rows); ?>
+      <small class="text-muted" id="lblCount">
+        Mostrando <?= $total ? "1 a {$total} de {$total}" : "0 de 0" ?> registros
+      </small>
       <ul class="pagination pagination-sm m-0">
         <li class="page-item disabled"><span class="page-link">Anterior</span></li>
         <li class="page-item active"><span class="page-link">1</span></li>
@@ -162,30 +287,3 @@
     </div>
   </div>
 </div>
-
-<script>
-/* ===== Filtro por cliente (front-end) + contador ===== */
-(function(){
-  const sel  = document.getElementById('cliSelect');
-  const btn  = document.getElementById('btnGo');
-  const rows = Array.from(document.querySelectorAll('#tblCobros tbody tr'));
-  const lbl  = document.getElementById('lblCount');
-
-  function visibleRows(){ return rows.filter(r => r.style.display !== 'none'); }
-
-  function filtrar(){
-    const q = (sel.value || '').trim().toLowerCase();
-    rows.forEach(r => {
-      const name = r.querySelector('.cli-name').textContent.trim().toLowerCase();
-      r.style.display = !q || name.includes(q) ? '' : 'none';
-    });
-    const vis = visibleRows().length;
-    lbl.textContent = `Mostrando ${vis} de ${rows.length} registros`;
-  }
-
-  sel.addEventListener('change', filtrar);
-  btn.addEventListener('click', filtrar);
-})();
-</script>
-</body>
-</html>

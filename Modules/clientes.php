@@ -54,7 +54,16 @@ SELECT
   MIN(CASE WHEN o.estado = 'activa' THEN o.periodicidad END)            AS periodicidad_activa,
   MIN(CASE WHEN o.estado = 'activa' THEN o.billing_policy END)          AS billing_policy_activa,
   MIN(CASE WHEN o.estado = 'activa' THEN o.cut_day END)                 AS cut_day_activo,
-  MIN(CASE WHEN o.estado = 'activa' THEN o.proxima_facturacion END)     AS proxima_facturacion_activa
+
+  -- AQUÍ el cambio importante:
+  MIN(
+    CASE
+      WHEN o.estado = 'activa'
+           AND oi.billing_type = 'recurrente'
+           AND oi.pausado = 0
+      THEN oi.next_run
+    END
+  ) AS proxima_facturacion_activa
 
 FROM clientes c
 JOIN ordenes o         ON o.cliente_id = c.id
@@ -63,6 +72,7 @@ LEFT JOIN orden_items oi ON oi.orden_id = o.id
 GROUP BY c.id, c.empresa, c.correo, c.telefono
 ORDER BY c.empresa ASC
 ";
+
 
 $st = $pdo->prepare($sql);
 $st->execute($args);
@@ -183,7 +193,7 @@ function fmt_date(?string $d): string {
   <!-- Tabla de clientes en proceso -->
   <div class="card border-0 shadow-sm">
     <div class="card-body">
-      <h5 class="mb-3">Historial de Clientes en proceso</h5>
+      <h5 class="mb-3"> Clientes en Proceso</h5>
 
       <?php if (!$rows): ?>
         <div class="alert alert-info mb-0">
@@ -194,57 +204,74 @@ function fmt_date(?string $d): string {
       <div class="table-responsive">
         <table class="table align-middle mb-0">
           <thead>
-            <tr>
-              <th>Cliente</th>
-              <th>Correo</th>
-              <th>Teléfono</th>
-              <th>Servicio</th>
-              <th>Periodo</th>
-              <th>Próx. facturación</th>
-              <th>Estado</th>
-              <th class="text-end">Acciones</th>
-            </tr>
-          </thead>
+  <tr>
+    <th>Cliente</th>
+    <th class="d-none d-lg-table-cell">Correo</th>
+    <th class="d-none d-md-table-cell">Teléfono</th>
+    <th>Servicio</th>
+    <th class="d-none d-lg-table-cell">Periodo</th>
+    <th class="d-none d-md-table-cell">Próx. facturación</th>
+    <th>Estado</th>
+    <th class="text-end">Acciones</th>
+  </tr>
+</thead>
+
           <tbody>
-          <?php foreach ($rows as $r): 
-            $activo        = (int)$r['ordenes_activas'] > 0;
-            $montoMensual  = (float)$r['mensual_base'];
-            $periodoTxt    = prettify_periodo($r);
-            $proximaTxt    = fmt_date($r['proxima_facturacion_activa'] ?? null);
-          ?>
-            <tr>
-              <td><?= htmlspecialchars($r['empresa']) ?></td>
-              <td><?= htmlspecialchars($r['correo']) ?></td>
-              <td><?= htmlspecialchars($r['telefono'] ?? '—') ?></td>
-              <td>
-                <?php if ($montoMensual > 0): ?>
-                  Mensual <?= money_mx($montoMensual) ?>
-                <?php else: ?>
-                  —
-                <?php endif; ?>
-              </td>
-              <td><?= htmlspecialchars($periodoTxt) ?></td>
-              <td><?= htmlspecialchars($proximaTxt) ?></td>
-              <td>
-                <?php if ($activo): ?>
-                  <span class="estado-badge estado-activo">Activo</span>
-                <?php else: ?>
-                  <span class="estado-badge estado-sin-orden">Sin orden activa</span>
-                <?php endif; ?>
-              </td>
-              <td class="text-end">
-                <?php if (!empty($r['orden_id'])): ?>
-                  <a href="/Sistema-de-Saldos-y-Pagos-/Public/index.php?m=cobro&orden_id=<?= (int)$r['orden_id'] ?>"
-                     class="btn btn-primary btn-sm">
-                    Cobrar
-                  </a>
-                <?php else: ?>
-                  <span class="text-muted small">Sin orden activa</span>
-                <?php endif; ?>
-              </td>
-            </tr>
-          <?php endforeach; ?>
-          </tbody>
+<?php foreach ($rows as $r): 
+  $activo        = (int)$r['ordenes_activas'] > 0;
+  $montoMensual  = (float)$r['mensual_base'];
+  $periodoTxt    = prettify_periodo($r);
+  $proximaTxt    = fmt_date($r['proxima_facturacion_activa'] ?? null);
+?>
+  <tr>
+    <td><?= htmlspecialchars($r['empresa']) ?></td>
+
+    <td class="d-none d-lg-table-cell">
+      <?= htmlspecialchars($r['correo']) ?>
+    </td>
+
+    <td class="d-none d-md-table-cell">
+      <?= htmlspecialchars($r['telefono'] ?? '—') ?>
+    </td>
+
+    <td>
+      <?php if ($montoMensual > 0): ?>
+        Mensual <?= money_mx($montoMensual) ?>
+      <?php else: ?>
+        —
+      <?php endif; ?>
+    </td>
+
+    <td class="d-none d-lg-table-cell">
+      <?= htmlspecialchars($periodoTxt) ?>
+    </td>
+
+    <td class="d-none d-md-table-cell">
+      <?= htmlspecialchars($proximaTxt) ?>
+    </td>
+
+    <td>
+      <?php if ($activo): ?>
+        <span class="estado-badge estado-activo">Activo</span>
+      <?php else: ?>
+        <span class="estado-badge estado-sin-orden">Sin orden activa</span>
+      <?php endif; ?>
+    </td>
+
+    <td class="text-end">
+      <?php if (!empty($r['orden_id'])): ?>
+        <a href="/Sistema-de-Saldos-y-Pagos-/Modules/cobro.php?m=cobro&orden_id=<?= (int)$r['orden_id'] ?>"
+           class="btn btn-primary btn-sm">
+          Cobrar
+        </a>
+      <?php else: ?>
+        <span class="text-muted small">Sin orden activa</span>
+      <?php endif; ?>
+    </td>
+  </tr>
+<?php endforeach; ?>
+</tbody>
+
         </table>
       </div>
 
