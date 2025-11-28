@@ -34,36 +34,38 @@ if ($clienteId > 0) {
 $sql = "
 SELECT
   cg.id,
-  LPAD(cg.id, 6, '0')                            AS folio,
+  LPAD(cg.id, 6, '0')                               AS folio,
   cg.periodo_inicio,
   cg.periodo_fin,
   cg.total,
-  cg.estatus                                      AS estatus_cargo,
+  cg.estatus                                         AS estatus_cargo,
+  cg.creado_en                                       AS cargo_creado_en,
 
-  c.empresa                                       AS cliente,
+  c.empresa                                          AS cliente,
 
   -- servicios del cargo (desde la orden)
   GROUP_CONCAT(DISTINCT oi.concepto
                ORDER BY oi.id
-               SEPARATOR '||')                    AS items_raw,
-  COUNT(DISTINCT oi.id)                          AS items_count,
+               SEPARATOR '||')                       AS items_raw,
+  COUNT(DISTINCT oi.id)                             AS items_count,
 
   -- info del último pago (si existe)
-  MAX(p.metodo)                                  AS pago_metodo,
-  MAX(p.referencia)                              AS pago_ref,
-  MAX(p.creado_en)                               AS pago_fecha
+  MAX(p.metodo)                                     AS pago_metodo,
+  MAX(p.referencia)                                 AS pago_ref,
+  MAX(p.creado_en)                                  AS pago_fecha
 
 FROM cargos cg
 JOIN ordenes o      ON o.id = cg.orden_id
 JOIN clientes c     ON c.id = o.cliente_id
 LEFT JOIN orden_items oi ON oi.orden_id = o.id
-LEFT JOIN pagos p        ON p.id = cg.id
+LEFT JOIN pagos p        ON p.cargo_id = cg.id
 {$where}
 GROUP BY
-  cg.id, cg.periodo_inicio, cg.periodo_fin, cg.total, cg.estatus,
-  c.empresa
+  cg.id, cg.periodo_inicio, cg.periodo_fin,
+  cg.total, cg.estatus, cg.creado_en, c.empresa
 ORDER BY cg.periodo_inicio DESC
 ";
+
 
 
 
@@ -224,7 +226,7 @@ function compress_paquete(string $itemsRaw, int $itemsCount, int $max = 2): stri
             <th>Importe</th>
             <th>Método de pago</th>
             <th># Depósito</th>
-            <th class="text-end">Acción</th>
+            <th class="text-end">Estado</th>
           </tr>
         </thead>
         <tbody>
@@ -237,7 +239,7 @@ function compress_paquete(string $itemsRaw, int $itemsCount, int $max = 2): stri
         <?php else: ?>
         <?php foreach ($rows as $r): 
   $paquete   = compress_paquete($r['items_raw'] ?? '', (int)$r['items_count']);
-  $fechaTxt  = fmt_date($r['periodo_inicio']);
+  $fechaTxt  = fmt_date($r['cargo_creado_en']);
   $importe   = money_mx($r['total']);
   $metodo    = $r['pago_metodo'] ?: '—';
   $ref       = $r['pago_ref'] ?: '—';
