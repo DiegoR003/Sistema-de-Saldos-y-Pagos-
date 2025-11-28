@@ -260,7 +260,7 @@ function compress_paquete(string $itemsRaw, int $itemsCount, int $max = 2): stri
   <td data-label="Importe"><?= $importe ?></td>
   <td data-label="Método de pago"><?= htmlspecialchars($metodo) ?></td>
   <td data-label="# Depósito"><?= htmlspecialchars($ref) ?></td>
-  <td data-label="Acción" class="text-end">
+  <td data-label="Estado" class="text-end">
     <span class="badge 
       <?= $estatus === 'pagado' ? 'text-bg-success' : ($estatus === 'emitido' ? 'text-bg-info' : 'text-bg-warning') ?>">
       <?= htmlspecialchars($estatus) ?>
