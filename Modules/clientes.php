@@ -50,20 +50,14 @@ SELECT
       ELSE 0
   END), 0) AS mensual_base,
 
-  MIN(CASE WHEN o.estado = 'activa' THEN o.id END)                      AS orden_id,
-  MIN(CASE WHEN o.estado = 'activa' THEN o.periodicidad END)            AS periodicidad_activa,
-  MIN(CASE WHEN o.estado = 'activa' THEN o.billing_policy END)          AS billing_policy_activa,
-  MIN(CASE WHEN o.estado = 'activa' THEN o.cut_day END)                 AS cut_day_activo,
+  MIN(CASE WHEN o.estado = 'activa' THEN o.id END)               AS orden_id,
+  MIN(CASE WHEN o.estado = 'activa' THEN o.periodicidad END)     AS periodicidad_activa,
+  MIN(CASE WHEN o.estado = 'activa' THEN o.billing_policy END)   AS billing_policy_activa,
+  MIN(CASE WHEN o.estado = 'activa' THEN o.cut_day END)          AS cut_day_activo,
 
-  -- AQUÍ el cambio importante:
-  MIN(
-    CASE
-      WHEN o.estado = 'activa'
-           AND oi.billing_type = 'recurrente'
-           AND oi.pausado = 0
-      THEN oi.next_run
-    END
-  ) AS proxima_facturacion_activa
+  -- ⭐ Usamos directamente la proxima_facturacion de la orden
+  MIN(CASE WHEN o.estado = 'activa' THEN o.proxima_facturacion END)
+    AS proxima_facturacion_activa
 
 FROM clientes c
 JOIN ordenes o         ON o.cliente_id = c.id
@@ -72,6 +66,7 @@ LEFT JOIN orden_items oi ON oi.orden_id = o.id
 GROUP BY c.id, c.empresa, c.correo, c.telefono
 ORDER BY c.empresa ASC
 ";
+
 
 
 $st = $pdo->prepare($sql);
@@ -156,6 +151,12 @@ function fmt_date(?string $d): string {
   background:#6c757d;
   color:#fff;
 }
+
+.clientes-page .estado-pendiente {
+  background:#ffc107;
+  color:#212529;
+}
+
 </style>
 
 <div class="container-fluid clientes-page">
@@ -216,13 +217,18 @@ function fmt_date(?string $d): string {
   </tr>
 </thead>
 
-          <tbody>
+<tbody>
 <?php foreach ($rows as $r): 
   $activo        = (int)$r['ordenes_activas'] > 0;
   $montoMensual  = (float)$r['mensual_base'];
   $periodoTxt    = prettify_periodo($r);
-  $proximaTxt    = fmt_date($r['proxima_facturacion_activa'] ?? null);
+
+  // ¿Tiene próxima facturación calculada (next_run / proxima_facturacion)?
+  $hasProxima    = !empty($r['proxima_facturacion_activa']);
+
+ $proximaTxt    = fmt_date($r['proxima_facturacion_activa'] ?? null);
 ?>
+
   <tr>
     <td><?= htmlspecialchars($r['empresa']) ?></td>
 
@@ -250,13 +256,18 @@ function fmt_date(?string $d): string {
       <?= htmlspecialchars($proximaTxt) ?>
     </td>
 
-    <td>
-      <?php if ($activo): ?>
-        <span class="estado-badge estado-activo">Activo</span>
-      <?php else: ?>
-        <span class="estado-badge estado-sin-orden">Sin orden activa</span>
-      <?php endif; ?>
-    </td>
+  <td>
+  <?php if ($activo): ?>
+    <?php if ($hasProxima): ?>
+      <span class="estado-badge estado-activo">Activo</span>
+    <?php else: ?>
+      <span class="estado-badge estado-pendiente">Pendiente</span>
+    <?php endif; ?>
+  <?php else: ?>
+    <span class="estado-badge estado-sin-orden">Sin orden activa</span>
+  <?php endif; ?>
+</td>
+
 
     <td class="text-end">
       <?php if (!empty($r['orden_id'])): ?>

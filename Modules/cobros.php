@@ -34,26 +34,18 @@ if ($clienteId > 0) {
 $sql = "
 SELECT
   cg.id,
-  LPAD(cg.id, 6, '0')                               AS folio,
+  LPAD(cg.id, 6, '0')              AS folio,
   cg.periodo_inicio,
   cg.periodo_fin,
   cg.total,
-  cg.estatus                                         AS estatus_cargo,
-  cg.creado_en                                       AS cargo_creado_en,
-
-  c.empresa                                          AS cliente,
-
-  -- servicios del cargo (desde la orden)
-  GROUP_CONCAT(DISTINCT oi.concepto
-               ORDER BY oi.id
-               SEPARATOR '||')                       AS items_raw,
-  COUNT(DISTINCT oi.id)                             AS items_count,
-
-  -- info del último pago (si existe)
-  MAX(p.metodo)                                     AS pago_metodo,
-  MAX(p.referencia)                                 AS pago_ref,
-  MAX(p.creado_en)                                  AS pago_fecha
-
+  cg.estatus                      AS estatus_cargo,
+  cg.creado_en                    AS creado_en,
+  c.empresa                       AS cliente,
+  GROUP_CONCAT(DISTINCT oi.concepto ORDER BY oi.id SEPARATOR '||') AS items_raw,
+  COUNT(DISTINCT oi.id)           AS items_count,
+  MAX(p.metodo)                   AS pago_metodo,
+  MAX(p.referencia)               AS pago_ref,
+  MAX(p.creado_en)                AS pago_fecha
 FROM cargos cg
 JOIN ordenes o      ON o.id = cg.orden_id
 JOIN clientes c     ON c.id = o.cliente_id
@@ -239,7 +231,7 @@ function compress_paquete(string $itemsRaw, int $itemsCount, int $max = 2): stri
         <?php else: ?>
         <?php foreach ($rows as $r): 
   $paquete   = compress_paquete($r['items_raw'] ?? '', (int)$r['items_count']);
-  $fechaTxt  = fmt_date($r['cargo_creado_en']);
+  $fechaTxt  = $r['pago_fecha'] ? fmt_date($r['pago_fecha']) : fmt_date($r['creado_en']);
   $importe   = money_mx($r['total']);
   $metodo    = $r['pago_metodo'] ?: '—';
   $ref       = $r['pago_ref'] ?: '—';

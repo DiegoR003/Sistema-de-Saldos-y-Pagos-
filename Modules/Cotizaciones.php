@@ -69,6 +69,7 @@ $rows = $st->fetchAll();
 $totalRows = $totalRows ?? 0;
 
 
+$esPendiente = ($r['estado'] === 'pendiente');
 
 /* -------- Helpers -------- */
 function money($n){ return '$'.number_format((float)$n,2); }
@@ -360,13 +361,13 @@ $qs = $_GET; unset($qs['p']);
     <input type="hidden" name="billing_json" id="billingJson">
     <!-- ✅ Este es el input que debe tener el valor del RFC -->
     <input type="hidden" name="rfc_id" id="aprRfcIdHidden">
-    <button class="btn btn-success" id="btnApr" type="submit">Aprobar</button>
+    <button class="btn btn-success" id="btnApr" type="submit" <?= $esPendiente ? '' : 'disabled' ?>>Aprobar</button>
   </form>
 
   <form id="fRej" method="post" action="/Sistema-de-Saldos-y-Pagos-/Public/api/cotizacion_reject.php"
         onsubmit="return confirm('¿Rechazar esta cotización?');">
     <input type="hidden" name="id" id="rejId">
-    <button class="btn btn-outline-danger" id="btnRej" disabled>Rechazar</button>
+    <button class="btn btn-outline-danger" id="btnRej" <?= $esPendiente ? '' : 'disabled' ?>>Rechazar</button>
   </form>
 </div>
 <script>
