@@ -180,6 +180,7 @@ $finMes   = $finMesDT->format('Y-m-d');
         $badgeClass = 'primary';
       }
     ?>
+    
     <div class="card border-0 shadow-sm cliente-card">
       <div class="card-body">
         <div class="d-flex flex-column flex-lg-row justify-content-between align-items-start align-items-lg-center">
