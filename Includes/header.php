@@ -113,7 +113,7 @@ if (!defined('BASE_URL')) {
         </button>
 
         <ul class="dropdown-menu dropdown-menu-end user-menu" aria-labelledby="userDropdown">
-          <li><a class="dropdown-item text-danger" href="login.php">Cerrar sesión</a></li>
+          <li><a class="dropdown-item text-danger" href="logout.php">Cerrar sesión</a></li>
         </ul>
       </div>
     </div>

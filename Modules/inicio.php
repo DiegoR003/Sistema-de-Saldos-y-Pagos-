@@ -41,8 +41,8 @@
 </style>
 <body>
 
-<div class="container-fluid dashboard py-3">
-  <h3 class="mb-3 fw-semibold">Dashboard <span class="text-muted fs-6">Control panel</span></h3>
+<div class="container-fluid dashboard  py-3">
+  <h3 class="mb-3 fw-semibold topbar">Dashboard <span class="text-muted fs-6">Control panel</span></h3>
 
   <!-- Tarjetas: 1 col en móvil, 2 en sm, 4 en xl -->
   <div class="row row-cols-1 row-cols-sm-2 row-cols-xl-4 g-3 mb-3 stats-grid">

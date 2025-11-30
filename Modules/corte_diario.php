@@ -1,125 +1,225 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Corte Diario</title>
+<?php
+// Modules/corte_diario.php
+declare(strict_types=1);
 
-  <style>
-  /* ===== Corte Diario (estático) ===== */
-  .corte .topbar{gap:.5rem;}
-  .corte .filters .form-control{height:44px;}
-  .corte .filters .btn-go{
-    height:44px; display:inline-flex; align-items:center;
-    background:#22c55e; border-color:#22c55e; color:#fff;
-  }
-  .corte .filters .btn-go:hover{filter:brightness(.95);}
-  .corte .card-header{font-weight:600;}
+require_once __DIR__ . '/../App/bd.php';
 
-  /* Resumen */
-  .corte .mini-card{
-    border-radius:.5rem; border:1px solid #eef2f7; padding:.85rem 1rem;
-    background:#fff; box-shadow:0 1px 2px rgba(0,0,0,.03);
-  }
-  .corte .mini-title{font-size:.85rem; color:#6b7280; margin-bottom:.25rem;}
-  .corte .mini-value{font-weight:700; font-size:1.15rem;}
+$pdo = db();
 
-  /* Tabla desktop */
-  .corte table{width:100%;}
-  .corte th,.corte td{white-space:nowrap; vertical-align:middle;}
+/* =========================
+   Helpers de fecha
+   ========================= */
+function parse_fecha_input(?string $s): ?string {
+    $s = trim((string)$s);
+    if ($s === '') return null;
 
-  /* ===== Versión móvil: filas apiladas como tarjetas ===== */
-  @media (max-width: 768px){
-    .corte thead{position:absolute; left:-9999px; top:-9999px;}
-
-    .corte table,
-    .corte tbody,
-    .corte tr,
-    .corte td{display:block; width:100%;}
-    .corte tbody{display:block;}
-
-    .corte tr{
-      background:#fff; border:1px solid #e9ecef; border-radius:.5rem;
-      padding:.5rem .75rem; margin-bottom:.75rem;
-      box-shadow:0 1px 3px rgba(0,0,0,.04);
+    // Formato dd/mm/yyyy
+    if (preg_match('/^(\d{2})\/(\d{2})\/(\d{4})$/', $s, $m)) {
+        return sprintf('%04d-%02d-%02d', (int)$m[3], (int)$m[2], (int)$m[1]);
     }
 
-    .corte td{
-      border:0; border-bottom:1px solid #f1f3f5;
-      position:relative; padding:.5rem 0 .5rem 7.75rem;
-      white-space:normal; text-align:right;
-    }
-    .corte td:last-child{border-bottom:0;}
-
-    .corte td::before{
-      content:attr(data-label);
-      position:absolute; left:.75rem; top:.5rem; width:6.8rem;
-      font-weight:600; color:#6b7280; text-align:left; white-space:normal;
+    // Asumimos que viene yyyy-mm-dd (input type=date)
+    if (preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $s, $m)) {
+        return sprintf('%04d-%02d-%02d', (int)$m[1], (int)$m[2], (int)$m[3]);
     }
 
-    .corte .table-wrap{overflow:visible;}
-    .corte .actions{display:flex; gap:.35rem; flex-wrap:wrap; justify-content:flex-end;}
-  }
-  </style>
-</head>
-<body>
+    return null;
+}
 
-<div class="container-fluid corte">
-  <!-- Título + acciones -->
-  <div class="d-flex align-items-center justify-content-between flex-wrap topbar mb-3">
+function fmt_fecha_humano(?string $sqlDateTime): string {
+    if (!$sqlDateTime) return '—';
+    $ts = strtotime($sqlDateTime);
+    if (!$ts) return '—';
+    return date('d/m/Y H:i', $ts);
+}
+
+function fmt_fecha_corta(?string $sqlDate): string {
+    if (!$sqlDate) return '';
+    $ts = strtotime($sqlDate);
+    if (!$ts) return '';
+    return date('d/m/Y', $ts);
+}
+
+function money_mx($v): string {
+    return '$' . number_format((float)$v, 2, '.', ',');
+}
+
+/**
+ * Comprime la lista de servicios tipo:
+ *   "cuenta - 1575||publicaciones - 2363||..." -> "cuenta - 1575 · publicaciones - 2363 · +9 más"
+ */
+function compress_paquete(string $itemsRaw, int $itemsCount, int $max = 2): string {
+    if ($itemsCount <= 0 || $itemsRaw === '') {
+        return '—';
+    }
+
+    $items = explode('||', $itemsRaw);
+    $itemsCount = max($itemsCount, count($items));
+
+    $preview = array_slice($items, 0, $max);
+    $preview = array_map('trim', $preview);
+
+    $extra = $itemsCount - count($preview);
+
+    $txt = implode(' · ', $preview);
+    if ($extra > 0) {
+        $txt .= " · +{$extra} más";
+    }
+    return $txt;
+}
+
+/* =========================
+   Filtros
+   ========================= */
+
+// Fecha del corte (un solo día). Por defecto hoy.
+$fechaInput  = $_GET['fecha'] ?? date('Y-m-d');
+$fechaSql    = parse_fecha_input($fechaInput) ?? date('Y-m-d');
+$fechaLabel  = fmt_fecha_corta($fechaSql);
+
+// Filtro opcional por nombre de cliente
+$clienteBusq = trim($_GET['cliente'] ?? '');
+
+/* =========================
+   Consulta
+   =========================
+   Traemos los PAGOS registrados ese día,
+   junto con info del cliente, cargo e items.
+*/
+$where  = "WHERE DATE(p.creado_en) = :f";
+$params = [':f' => $fechaSql];
+
+if ($clienteBusq !== '') {
+    $where .= " AND c.empresa LIKE :cli";
+    $params[':cli'] = "%{$clienteBusq}%";
+}
+
+$sql = "
+SELECT
+    p.id                                 AS pago_id,
+    LPAD(cg.id, 6, '0')                  AS folio,
+    c.empresa                            AS cliente,
+    p.creado_en                          AS fecha_pago,
+    p.monto                              AS importe,
+    p.metodo                             AS metodo,
+    p.referencia                         AS referencia,
+
+    GROUP_CONCAT(DISTINCT oi.concepto
+                 ORDER BY oi.id
+                 SEPARATOR '||')         AS items_raw,
+    COUNT(DISTINCT oi.id)                AS items_count
+FROM pagos p
+JOIN cargos cg        ON cg.id = p.cargo_id
+JOIN ordenes o        ON o.id = cg.orden_id
+JOIN clientes c       ON c.id = o.cliente_id
+LEFT JOIN orden_items oi ON oi.orden_id = o.id
+{$where}
+GROUP BY
+    p.id, cg.id, c.empresa, p.creado_en, p.monto, p.metodo, p.referencia
+ORDER BY p.creado_en DESC
+";
+
+$st = $pdo->prepare($sql);
+$st->execute($params);
+$rows = $st->fetchAll(PDO::FETCH_ASSOC);
+
+/* =========================
+   Totales del corte
+   ========================= */
+$transacciones = count($rows);
+$totalCobrado  = 0.0;
+$efectivo      = 0.0;
+
+foreach ($rows as $r) {
+    $totalCobrado += (float)$r['importe'];
+    if (($r['metodo'] ?? '') === 'efectivo') {
+        $efectivo += (float)$r['importe'];
+    }
+}
+$noEfectivo = $totalCobrado - $efectivo;
+?>
+<style>
+.corte-diario .filters .form-control,
+.corte-diario .filters .btn-go{
+  height:44px;
+}
+.corte-diario .filters .btn-go{
+  display:inline-flex;align-items:center;
+  background:#fdd835;border-color:#fdd835;color:#000;
+}
+.corte-diario .filters .btn-go:hover{filter:brightness(.95);}
+.corte-diario .card-header{font-weight:600;}
+</style>
+
+<div class="container-fluid corte-diario">
+  <div class="d-flex align-items-center justify-content-between topbar mb-3">
     <h3 class="mb-0 fw-semibold">Corte Diario <span class="text-muted fs-6">Control panel</span></h3>
 
     <div class="d-flex align-items-center gap-2">
-      <!-- Opcional: Mostrar -->
-      <div class="dropdown">
-        <button class="btn btn-light border dropdown-toggle" data-bs-toggle="dropdown" type="button">
+      <div class="dropdown me-2">
+        <button class="btn btn-light border dropdown-toggle" type="button" data-bs-toggle="dropdown">
           Mostrar
         </button>
         <ul class="dropdown-menu dropdown-menu-end">
-          <li><a class="dropdown-item" href="#">Hoy</a></li>
-          <li><a class="dropdown-item" href="#">Últimos 7 días</a></li>
-          <li><a class="dropdown-item" href="#">Este mes</a></li>
+          <li><span class="dropdown-item-text text-muted">Solo informativo</span></li>
+          <li><hr class="dropdown-divider"></li>
+          <li><a class="dropdown-item" href="?m=corte_diario">Hoy</a></li>
         </ul>
       </div>
 
-      <!-- Opcional: Exportar (placeholders) -->
-      <div class="btn-group">
-        <button class="btn btn-outline-secondary btn-sm">Exportar PDF</button>
-        <button class="btn btn-outline-secondary btn-sm">Exportar Excel</button>
-      </div>
+      <button class="btn btn-outline-secondary btn-sm" type="button"
+              onclick="alert('Exportar a PDF se implementa después 😊');">
+        Exportar PDF
+      </button>
+      <button class="btn btn-outline-secondary btn-sm" type="button"
+              onclick="alert('Exportar a Excel se implementa después 😊');">
+        Exportar Excel
+      </button>
     </div>
   </div>
 
   <!-- Filtros -->
   <div class="card border-0 shadow-sm mb-3">
     <div class="card-body filters">
-      <div class="row g-2 align-items-center">
+      <form class="row g-2 align-items-center"
+            method="get"
+            action="/Sistema-de-Saldos-y-Pagos-/Public/index.php">
+        <input type="hidden" name="m" value="corte_diario">
+
         <div class="col-12 col-md-3">
-          <label class="form-label mb-1">Desde</label>
-          <input id="fDesde" type="date" class="form-control" />
+          <label class="form-label mb-1">Fecha</label>
+          <input type="date"
+                 name="fecha"
+                 class="form-control"
+                 value="<?= htmlspecialchars($fechaSql) ?>">
         </div>
-        <div class="col-12 col-md-3">
-          <label class="form-label mb-1">Hasta</label>
-          <input id="fHasta" type="date" class="form-control" />
-        </div>
-        <div class="col-12 col-md-4">
+
+        <div class="col-12 col-md-5">
           <label class="form-label mb-1">Cliente</label>
-          <input id="fCliente" type="text" class="form-control" placeholder="Nombre del cliente…"/>
+          <input type="text"
+                 name="cliente"
+                 class="form-control"
+                 placeholder="Nombre del cliente..."
+                 value="<?= htmlspecialchars($clienteBusq) ?>">
         </div>
-        <div class="col-12 col-md-2 d-grid">
-          <label class="form-label mb-1 d-none d-md-block">&nbsp;</label>
-          <button id="btnFiltrar" class="btn btn-go"><i class="bi bi-funnel me-1"></i> Filtrar</button>
+
+        <div class="col-12 col-md-2 d-grid mt-4 mt-md-4">
+          <button class="btn btn-go" type="submit">
+            <i class="bi bi-calculator me-1"></i> Generar corte
+          </button>
         </div>
-      </div>
+      </form>
     </div>
   </div>
 
-  <!-- Tabla -->
-  <div class="card border-0 shadow-sm">
-    <div class="card-header bg-white">Historial de Cobros</div>
+  <!-- Historial de cobros del día -->
+  <div class="card border-0 shadow-sm mb-3">
+    <div class="card-header bg-white">
+      Historial de Cobros del <?= htmlspecialchars($fechaLabel) ?>
+    </div>
 
     <div class="table-wrap">
-      <table class="table align-middle mb-0" id="tblCorte">
+      <table class="table align-middle mb-0">
         <thead class="table-light">
           <tr>
             <th>Folio</th>
@@ -132,157 +232,68 @@
           </tr>
         </thead>
         <tbody>
-          <!-- Ejemplos estáticos -->
+        <?php if (!$rows): ?>
           <tr>
-            <td data-label="Folio">000047</td>
-            <td data-label="Cliente" class="cli-name">amner</td>
-            <td data-label="Servicio">Tigo</td>
-            <td data-label="Fecha" class="date-val">2019-01-05</td>
-            <td data-label="Importe" class="amt-val">20.00</td>
-            <td data-label="Método de pago" class="met-val">Efectivo</td>
-            <td data-label="# Depósito">—</td>
+            <td colspan="7" class="text-center text-muted">
+              No hay cobros registrados para esta fecha.
+            </td>
           </tr>
-
-          <tr>
-            <td data-label="Folio">000046</td>
-            <td data-label="Cliente" class="cli-name">Amado Saucedo</td>
-            <td data-label="Servicio">Carwash</td>
-            <td data-label="Fecha" class="date-val">2019-01-05</td>
-            <td data-label="Importe" class="amt-val">45.00</td>
-            <td data-label="Método de pago" class="met-val">Transferencia</td>
-            <td data-label="# Depósito">TRX-93211</td>
-          </tr>
-
-          <tr>
-            <td data-label="Folio">000045</td>
-            <td data-label="Cliente" class="cli-name">Dayana Saucedo</td>
-            <td data-label="Servicio">Web Services</td>
-            <td data-label="Fecha" class="date-val">2019-01-04</td>
-            <td data-label="Importe" class="amt-val">30.00</td>
-            <td data-label="Método de pago" class="met-val">Tarjeta</td>
-            <td data-label="# Depósito">POS-1287</td>
-          </tr>
+        <?php else: ?>
+          <?php foreach ($rows as $r):
+            $paquete = compress_paquete($r['items_raw'] ?? '', (int)$r['items_count']);
+          ?>
+            <tr>
+              <td><?= htmlspecialchars($r['folio']) ?></td>
+              <td><?= htmlspecialchars($r['cliente']) ?></td>
+              <td><?= htmlspecialchars($paquete) ?></td>
+              <td><?= htmlspecialchars(fmt_fecha_humano($r['fecha_pago'])) ?></td>
+              <td><?= money_mx($r['importe']) ?></td>
+              <td><?= htmlspecialchars(strtoupper($r['metodo'] ?? '—')) ?></td>
+              <td><?= htmlspecialchars($r['referencia'] ?? '—') ?></td>
+            </tr>
+          <?php endforeach; ?>
+        <?php endif; ?>
         </tbody>
       </table>
-    </div>
-
-    <!-- Paginación simulada -->
-    <div class="card-body d-flex flex-wrap justify-content-between align-items-center gap-2">
-      <small class="text-muted" id="lblCount">Mostrando 1 a 3 de 3 registros</small>
-      <ul class="pagination pagination-sm m-0">
-        <li class="page-item disabled"><span class="page-link">Anterior</span></li>
-        <li class="page-item active"><span class="page-link">1</span></li>
-        <li class="page-item disabled"><span class="page-link">Siguiente</span></li>
-      </ul>
     </div>
   </div>
 
   <!-- Resumen del corte -->
-  <div class="mt-3">
-    <div class="row g-2">
-      <div class="col-6 col-md-3">
-        <div class="mini-card">
-          <div class="mini-title">Transacciones</div>
-          <div class="mini-value" id="sumTx">0</div>
+  <div class="row g-3">
+    <div class="col-12 col-md-3">
+      <div class="card border-0 shadow-sm">
+        <div class="card-body">
+          <div class="text-muted small">Transacciones</div>
+          <div class="fs-4 fw-semibold"><?= (int)$transacciones ?></div>
         </div>
       </div>
-      <div class="col-6 col-md-3">
-        <div class="mini-card">
-          <div class="mini-title">Total cobrado</div>
-          <div class="mini-value" id="sumTotal">$0.00</div>
+    </div>
+
+    <div class="col-12 col-md-3">
+      <div class="card border-0 shadow-sm">
+        <div class="card-body">
+          <div class="text-muted small">Total cobrado</div>
+          <div class="fs-4 fw-semibold"><?= money_mx($totalCobrado) ?></div>
         </div>
       </div>
-      <div class="col-6 col-md-3">
-        <div class="mini-card">
-          <div class="mini-title">Efectivo</div>
-          <div class="mini-value" id="sumCash">$0.00</div>
+    </div>
+
+    <div class="col-12 col-md-3">
+      <div class="card border-0 shadow-sm">
+        <div class="card-body">
+          <div class="text-muted small">Efectivo</div>
+          <div class="fs-4 fw-semibold"><?= money_mx($efectivo) ?></div>
         </div>
       </div>
-      <div class="col-6 col-md-3">
-        <div class="mini-card">
-          <div class="mini-title">No efectivo</div>
-          <div class="mini-value" id="sumNonCash">$0.00</div>
+    </div>
+
+    <div class="col-12 col-md-3">
+      <div class="card border-0 shadow-sm">
+        <div class="card-body">
+          <div class="text-muted small">No efectivo</div>
+          <div class="fs-4 fw-semibold"><?= money_mx($noEfectivo) ?></div>
         </div>
       </div>
     </div>
   </div>
 </div>
-
-<script>
-/* ========= Demo front-end: filtro + sumatorias ========= */
-(function(){
-  const $ = sel => document.querySelector(sel);
-  const $$ = sel => Array.from(document.querySelectorAll(sel));
-
-  const fDesde   = $('#fDesde');
-  const fHasta   = $('#fHasta');
-  const fCliente = $('#fCliente');
-  const btnFil   = $('#btnFiltrar');
-
-  // Setea fechas por defecto (hoy)
-  const hoy = new Date();
-  const y  = hoy.getFullYear();
-  const m  = String(hoy.getMonth()+1).padStart(2,'0');
-  const d  = String(hoy.getDate()).padStart(2,'0');
-  const hoyStr = `${y}-${m}-${d}`;
-  if(!fDesde.value) fDesde.value = hoyStr;
-  if(!fHasta.value) fHasta.value = hoyStr;
-
-  function visibleRows(){
-    return $$('#tblCorte tbody tr').filter(r => r.style.display !== 'none');
-  }
-
-  function filtrar(){
-    const d1 = fDesde.value ? new Date(fDesde.value) : null;
-    const d2 = fHasta.value ? new Date(fHasta.value) : null;
-    const q  = (fCliente.value || '').toLowerCase();
-
-    $$('#tblCorte tbody tr').forEach(tr => {
-      const cli  = tr.querySelector('.cli-name').textContent.toLowerCase();
-      const fstr = tr.querySelector('.date-val').textContent.trim();
-      const f    = new Date(fstr);
-
-      const okCli = !q || cli.includes(q);
-      const okDesde = !d1 || f >= d1;
-      const okHasta = !d2 || f <= d2;
-
-      tr.style.display = (okCli && okDesde && okHasta) ? '' : 'none';
-    });
-
-    // Actualiza contador
-    const total = $$('#tblCorte tbody tr').length;
-    const vis   = visibleRows().length;
-    $('#lblCount').textContent = `Mostrando ${vis} de ${total} registros`;
-
-    // Recalcula sumas
-    recalcular();
-  }
-
-  function recalcular(){
-    const rows = visibleRows();
-    let total=0, tx=0, cash=0, nonCash=0;
-
-    rows.forEach(tr=>{
-      const amt = parseFloat(tr.querySelector('.amt-val').textContent) || 0;
-      const met = tr.querySelector('.met-val').textContent.trim().toLowerCase();
-      total += amt; tx += 1;
-      if (met === 'efectivo') cash += amt; else nonCash += amt;
-    });
-
-    $('#sumTx').textContent = tx;
-    $('#sumTotal').textContent = `$${total.toFixed(2)}`;
-    $('#sumCash').textContent = `$${cash.toFixed(2)}`;
-    $('#sumNonCash').textContent = `$${nonCash.toFixed(2)}`;
-  }
-
-  btnFil.addEventListener('click', filtrar);
-  fDesde.addEventListener('change', filtrar);
-  fHasta.addEventListener('change', filtrar);
-  fCliente.addEventListener('input', filtrar);
-
-  // Primera pasada
-  filtrar();
-})();
-</script>
-</body>
-</html>

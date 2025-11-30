@@ -28,7 +28,7 @@ if (!function_exists('month_start')) {
 const IVA_TASA = 0.16;
 
 function back(string $msg, bool $ok, ?int $ordenId = null): never {
-    $base = '/Sistema-de-Saldos-y-Pagos-/Public/index.php';
+    $base = '/Sistema-de-Saldos-y-Pagos-/Modules/cobro.php';
     if ($ordenId) {
         $url = $base . '?m=cobro&orden_id=' . $ordenId;
     } else {

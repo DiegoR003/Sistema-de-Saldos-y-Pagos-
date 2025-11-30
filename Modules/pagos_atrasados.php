@@ -14,6 +14,9 @@ $pdo = db();
  */
 $hoy = (new DateTimeImmutable('today'))->format('Y-m-d');
 
+
+
+
 $sql = "
 SELECT
   c.id               AS cliente_id,
@@ -61,6 +64,11 @@ function prettify_periodicidad(?string $p): string {
         default:          return 'Servicio';
     }
 }
+
+function atrasadosUrl(string $vistaValue): string {
+    return "/Sistema-de-Saldos-y-Pagos-/Public/index.php?m=pagos_atrasados&vista={$vistaValue}";
+}
+
 ?>
 
 <style>
@@ -95,14 +103,14 @@ function prettify_periodicidad(?string $p): string {
     </h3>
 
     <div class="dropdown">
-      <button class="btn btn-light border dropdown-toggle" data-bs-toggle="dropdown" type="button">
+     <!-- <button class="btn btn-light border dropdown-toggle" data-bs-toggle="dropdown" type="button">
         Mostrar
       </button>
       <ul class="dropdown-menu dropdown-menu-end">
         <li><a class="dropdown-item" href="#">Todos</a></li>
         <li><a class="dropdown-item" href="#">Últimos 7 días</a></li>
         <li><a class="dropdown-item" href="#">Últimos 30 días</a></li>
-      </ul>
+      </ul> -->
     </div>
   </div>
 

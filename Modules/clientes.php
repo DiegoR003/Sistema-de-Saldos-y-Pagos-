@@ -11,13 +11,29 @@ $pdo = db();
    ========================= */
 $q = trim($_GET['q'] ?? '');
 
-$where = "WHERE o.estado = 'activa'";
+$where = "WHERE o.estado='activa'";
 $args  = [];
 
 if ($q !== '') {
-    // un solo named param :q
-    $where .= " AND (c.empresa LIKE :q OR c.correo LIKE :q OR c.telefono LIKE :q)";
-    $args[':q'] = "%{$q}%";
+  $where .= " AND (c.empresa LIKE ? OR c.correo LIKE ? OR c.telefono LIKE ?)";
+  $searchTerm = "%{$q}%";
+  $args[] = $searchTerm;
+  $args[] = $searchTerm;
+  $args[] = $searchTerm;
+}
+
+/* =========================
+   Filtro Mostrar (vista)
+   ========================= */
+$vista = $_GET['vista'] ?? 'todos';
+$having = '';
+
+if ($vista === 'activos') {
+  // clientes cuyas órdenes activas tienen cargos, todos pagados
+  $having = 'HAVING cargos_pagados > 0 AND cargos_pendientes = 0';
+} elseif ($vista === 'pendientes') {
+  // clientes con al menos un cargo pendiente (emitido/no pagado)
+  $having = 'HAVING cargos_pendientes > 0';
 }
 
 /* =========================
@@ -55,7 +71,7 @@ SELECT
   MIN(CASE WHEN o.estado = 'activa' THEN o.billing_policy END)   AS billing_policy_activa,
   MIN(CASE WHEN o.estado = 'activa' THEN o.cut_day END)          AS cut_day_activo,
 
-  -- ⭐ Usamos directamente la proxima_facturacion de la orden
+  --  Usamos directamente la proxima_facturacion de la orden
   MIN(CASE WHEN o.estado = 'activa' THEN o.proxima_facturacion END)
     AS proxima_facturacion_activa
 
@@ -161,16 +177,16 @@ function fmt_date(?string $d): string {
 
 <div class="container-fluid clientes-page">
 
-  <div class="d-flex align-items-center justify-content-between mb-3">
+  <div class="d-flex align-items-center justify-content-between topbar mb-3">
     <h3 class="mb-0">Clientes</h3>
 
     <div class="dropdown">
-      <button class="btn btn-light border dropdown-toggle" type="button" data-bs-toggle="dropdown">
+     <!-- <button class="btn btn-light border dropdown-toggle" type="button" data-bs-toggle="dropdown">
         Mostrar
       </button>
       <ul class="dropdown-menu dropdown-menu-end">
         <li><a class="dropdown-item" href="?m=clientes">Todos</a></li>
-      </ul>
+      </ul> -->
     </div>
   </div>
 
@@ -220,7 +236,8 @@ function fmt_date(?string $d): string {
 <tbody>
 <?php foreach ($rows as $r): 
   $activo        = (int)$r['ordenes_activas'] > 0;
-  $montoMensual  = (float)$r['mensual_base'];
+  $montoMensual  = (float)$r['mensual_base'];             // sin IVA
+   $montoMensualConIVA = $montoMensual * 1.16;          // con IVA
   $periodoTxt    = prettify_periodo($r);
 
   // ¿Tiene próxima facturación calculada (next_run / proxima_facturacion)?
@@ -242,7 +259,7 @@ function fmt_date(?string $d): string {
 
     <td>
       <?php if ($montoMensual > 0): ?>
-        Mensual <?= money_mx($montoMensual) ?>
+        Mensual <?= money_mx($montoMensualConIVA) ?>
       <?php else: ?>
         —
       <?php endif; ?>

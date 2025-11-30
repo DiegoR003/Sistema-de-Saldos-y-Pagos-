@@ -122,9 +122,9 @@ $qs = $_GET; unset($qs['p']);
           <li><a class="dropdown-item" href="#">PDF</a></li>
         </ul>
       </div>
-      <a class="btn btn-primary btn-sm" href="?m=cotizaciones_nueva">
-        <i class="bi bi-plus-lg me-1"></i> Nueva manual
-      </a>
+      <!-- <a class="btn btn-primary btn-sm" href="?m=cotizaciones_nueva">
+        <i class="bi bi-plus-lg me-1"></i> Nueva Cotización
+      </a> -->
     </div>
   </div>
 
@@ -241,6 +241,7 @@ $qs = $_GET; unset($qs['p']);
     <?php foreach ($rows as $r):
       $id=(int)$r['id'];
       $badge = ['pendiente'=>'badge-pend','aprobada'=>'badge-aprb','rechazada'=>'badge-rech'][$r['estado']] ?? 'badge-pend';
+       $editable = ($r['estado'] === 'pendiente');
     ?>
     <div class="quote-card mb-2">
       <div class="d-flex justify-content-between align-items-center">
@@ -321,6 +322,7 @@ $qs = $_GET; unset($qs['p']);
      <!-- Editar conceptos (collapse) -->
    <!-- ===== Editar conceptos (contenedor autocontenido) ===== -->
 <div class="card mb-3" id="boxEditarConceptos">
+  <?php if ($editable): ?>
   <div class="card-header d-flex align-items-center justify-content-between">
     <strong class="m-0">Editar conceptos</strong>
     <button class="btn btn-sm btn-light" id="btnToggleEdit" type="button" aria-expanded="false" aria-controls="editCollapse">
@@ -337,18 +339,25 @@ $qs = $_GET; unset($qs['p']);
       <input type="hidden" name="billing_json" id="billingJson">
     </div>
   </div>
+  <?php else: ?>
+    <span class="dropdown-item text-muted small" style="pointer-events:none;">
+      Esta Cotización Ya Ha Sido Aprobada/Rechazada
+    </span>
+  <?php endif; ?>
 </div>
 
 
 
  <!-- Selector de RFC de la empresa (emisor) -->
 <div class="mb-3">
+  <?php if ($editable): ?>
   <label for="aprRfc" class="form-label">RFC emisor (para facturar)</label>
   <select id="aprRfc" class="form-select">
     <option value="">Cargando RFCs…</option>
   </select>
   <input type="hidden" name="rfc_id" id="aprRfcId" value="">
   <div class="form-text">Selecciona el RFC de la empresa con el que se emitirá la factura.</div>
+  <?php endif; ?>
 </div>
 
 
@@ -457,6 +466,14 @@ $qs = $_GET; unset($qs['p']);
     const btnRej = $('#btnRej');
     if (btnApr) btnApr.disabled = !pend;
     if (btnRej) btnRej.disabled = !pend;
+
+    // inhabilitar botones si está aprobado / rechazado
+     const estatus  = (d.estado === 'aprobada' || d.estado === 'rechazada');
+     const rfc = $('#aprRfc');
+     const conceptos = $('#boxEditarConceptos');
+
+     if (rfc) rfc.disabled = !estatus;
+    if (conceptos) conceptos.disabled = !estatus;
   }
 
   function fillItems(d){

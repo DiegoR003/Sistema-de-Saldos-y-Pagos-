@@ -8,10 +8,29 @@ $pdo = db();
 $q = trim($_GET['q'] ?? '');
 $params = [];
 $where = "WHERE o.estado='activa'";
+
 if ($q !== '') {
-  $where .= " AND (c.empresa LIKE :q OR c.correo LIKE :q OR c.telefono LIKE :q)";
-  $params[':q'] = "%{$q}%";
+  $where .= " AND (c.empresa LIKE ? OR c.correo LIKE ? OR c.telefono LIKE ?)";
+  $searchTerm = "%{$q}%";
+  $params[] = $searchTerm;
+  $params[] = $searchTerm;
+  $params[] = $searchTerm;
 }
+
+
+  // --- Filtro Mostrar --- 
+$vista = $_GET['vista'] ?? 'todos';
+$having = '';
+
+if ($vista === 'pagados') {
+  // órdenes que tienen cargos y todos están pagados
+  $having = 'HAVING cargos_pagados > 0 AND cargos_pendientes = 0';
+} elseif ($vista === 'vencidos') {
+  // órdenes con al menos un cargo pendiente
+  // (si quieres ser más estricto, luego podemos meter la fecha de proxima_facturacion)
+  $having = 'HAVING cargos_pendientes > 0';
+}
+
 
 // --- Consulta: órdenes activas + cliente + suma mensual base (items recurrentes no pausados) ---
 $sql = "
@@ -31,12 +50,10 @@ SELECT
     WHEN oi.billing_type='recurrente' AND oi.pausado=0 THEN oi.monto
     ELSE 0 END),0)                                    AS mensual_base,
 
-  -- cuantos cargos pagados tiene esta orden
   COALESCE(SUM(CASE
     WHEN cg.estatus='pagado' THEN 1
     ELSE 0 END),0)                                    AS cargos_pagados,
 
-  -- cuantos cargos NO pagados (emitidos / pendientes) tiene
   COALESCE(SUM(CASE
     WHEN cg.id IS NOT NULL AND cg.estatus <> 'pagado' THEN 1
     ELSE 0 END),0)                                    AS cargos_pendientes
@@ -47,9 +64,11 @@ LEFT JOIN orden_items oi ON oi.orden_id = o.id
 LEFT JOIN cargos cg      ON cg.orden_id = o.id
 {$where}
 GROUP BY o.id
+{$having}
 ORDER BY ANY_VALUE(c.empresa) ASC
 LIMIT 200
 ";
+
 
 
 $st = $pdo->prepare($sql);
@@ -119,18 +138,28 @@ $finMes   = $finMesDT->format('Y-m-d');
 </style>
 
 <div class="container-fluid cobrar">
-  <div class="d-flex align-items-center justify-content-between mb-3">
+  <div class="d-flex align-items-center justify-content-between topbar mb-3">
     <h3 class="mb-0 fw-semibold">Cobrar <span class="text-muted fs-6">Control panel</span></h3>
+
 
     <div class="dropdown">
       <button class="btn btn-light border dropdown-toggle" type="button" data-bs-toggle="dropdown">
-        Mostrar
-      </button>
-      <ul class="dropdown-menu dropdown-menu-end">
-        <li><a class="dropdown-item" href="?m=cobrar">Todos</a></li>
-        <li><a class="dropdown-item" href="#" onclick="alert('Filtro de ejemplo');return false;">Solo vencidos</a></li>
-        <li><a class="dropdown-item" href="#" onclick="alert('Filtro de ejemplo');return false;">Pagados</a></li>
-      </ul>
+    Mostrar
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li>
+      <a class="dropdown-item <?= $vista==='todos' ? 'active' : '' ?>"
+         href="?m=cobrar&vista=todos">Todos</a>
+    </li>
+    <li>
+      <a class="dropdown-item <?= $vista==='vencidos' ? 'active' : '' ?>"
+         href="?m=cobrar&vista=vencidos">Solo vencidos</a>
+    </li>
+    <li>
+      <a class="dropdown-item <?= $vista==='pagados' ? 'active' : '' ?>"
+         href="?m=cobrar&vista=pagados">Pagados</a>
+    </li>
+  </ul>
     </div>
   </div>
 
@@ -151,15 +180,14 @@ $finMes   = $finMesDT->format('Y-m-d');
     <div class="alert alert-info">No hay órdenes activas (o no hay coincidencias con la búsqueda).</div>
   <?php endif; ?>
 
-  <!-- Listado de clientes / órdenes -->
+    <!-- Listado de clientes / órdenes -->
   <div class="vstack gap-3">
     <?php foreach ($rows as $r):
       // total mensual estimado con IVA (sólo para mostrar en lista)
-      $mensualConIVA = round((float)$r['mensual_base'] * 1.16, 2);
-      $resumenServicios = servicios_resumen($pdo, (int)$r['orden_id'], 2);
+      $mensualConIVA     = round((float)$r['mensual_base'] * 1.16, 2);
+      $resumenServicios  = servicios_resumen($pdo, (int)$r['orden_id'], 2);
 
-      // badge de estado según proxima_facturacion (simple)
-       // Estado de pago según cargos (pagados / pendientes)
+      // Estado de pago según cargos (pagados / pendientes)
       $pagados    = (int)$r['cargos_pagados'];
       $pendientes = (int)$r['cargos_pendientes'];
 
@@ -167,67 +195,66 @@ $finMes   = $finMesDT->format('Y-m-d');
       $badgeClass = 'secondary';
 
       if ($pagados === 0 && $pendientes === 0) {
-        // nunca se ha emitido/pagado nada: Nuevo (gris)
         $badgeTxt   = 'Nuevo';
         $badgeClass = 'secondary';
       } elseif ($pendientes === 0 && $pagados > 0) {
-        // tiene cargos y todos están pagados
         $badgeTxt   = 'Al corriente';
         $badgeClass = 'success';
       } else {
-        // tiene al menos un cargo emitido o mixto pagado+emitido
         $badgeTxt   = 'En servicio';
         $badgeClass = 'primary';
       }
     ?>
-    
-    <div class="card border-0 shadow-sm cliente-card">
-      <div class="card-body">
-        <div class="d-flex flex-column flex-lg-row justify-content-between align-items-start align-items-lg-center">
-          <div class="me-lg-3">
-            <a class="h5 link-primary d-inline-block mb-2"
-               href="/Sistema-de-Saldos-y-Pagos-/Public/index.php?m=cobro&orden_id=<?= (int)$r['orden_id'] ?>">
-               <?= htmlspecialchars($r['empresa']) ?>
-            </a>
-            <div class="text-muted">
-            <div>Servicios: <?= htmlspecialchars($resumenServicios) ?></div>
-            <div>Mensual: <span class="fw-semibold"><?= money_mx($mensualConIVA) ?></span></div>
-            </div>
-             <div class="mt-1">
+
+      <div class="card border-0 shadow-sm cliente-card">
+        <div class="card-body">
+          <div class="d-flex flex-column flex-lg-row justify-content-between align-items-start align-items-lg-center">
+            <div class="me-lg-3">
+              <a class="h5 link-primary d-inline-block mb-2"
+                href="/Sistema-de-Saldos-y-Pagos-/Public/index.php?m=cobro&orden_id=<?= (int)$r['orden_id'] ?>">
+                <?= htmlspecialchars($r['empresa']) ?>
+              </a>
+              <div class="text-muted">
+                <div>Servicios: <?= htmlspecialchars($resumenServicios) ?></div>
+                <div>Mensual: <span class="fw-semibold"><?= money_mx($mensualConIVA) ?></span></div>
+              </div>
+              <div class="mt-1">
                 Estado de pago:
                 <span class="badge rounded-pill bg-<?= $badgeClass ?>"><?= $badgeTxt ?></span>
                 <?php if (!empty($r['proxima_facturacion'])): ?>
-                  <span class="small text-muted ms-2">Próx. fact.: <?= htmlspecialchars($r['proxima_facturacion']) ?></span>
+                  <span class="small text-muted ms-2">
+                    Próx. fact.: <?= htmlspecialchars($r['proxima_facturacion']) ?>
+                  </span>
                 <?php endif; ?>
               </div>
             </div>
 
             <div class="d-flex gap-1 mt-2 mt-lg-0">
-            <!-- Botón 1: Ver cobro (detalle mes a mes) -->
-            <a class="btn btn-outline-primary"
-               href="/Sistema-de-Saldos-y-Pagos-/Modules/cobro.php?m=cobro&orden_id=<?= (int)$r['orden_id'] ?>">
-              <i class="bi bi-receipt"></i> Ver cobro
-            </a>
+              <!-- Botón 1: Ver cobro (detalle mes a mes) -->
+              <a class="btn btn-outline-primary"
+                href="/Sistema-de-Saldos-y-Pagos-/Modules/cobro.php?m=cobro&orden_id=<?= (int)$r['orden_id'] ?>">
+                <i class="bi bi-receipt"></i> Ver cobro
+              </a>
 
-            <!-- Botón 2: Emitir / Notificar (mes actual) -->
-            <form method="post"
-                  action="/Sistema-de-Saldos-y-Pagos-/Public/api/cargos_emitir.php"
-                  onsubmit="return confirm('¿Emitir/actualizar el cargo de este mes y notificar al cliente?');">
-              <input type="hidden" name="orden_id" value="<?= (int)$r['orden_id'] ?>">
-              <input type="hidden" name="periodo_inicio" value="<?= $iniMes ?>">
-              <input type="hidden" name="periodo_fin" value="<?= $finMes ?>">
-              <input type="hidden" name="periodo_mes" value="<?= (int)$m ?>">
-              <button class="btn btn-warning">
-                <i class="bi bi-megaphone"></i> Emitir / Notificar
-              </button>
-            </form>
-          </div>
-          </div>
+              <!-- Botón 2: Emitir / Notificar (mes actual) -->
+              <form method="post"
+                    action="/Sistema-de-Saldos-y-Pagos-/Public/api/cargos_emitir.php"
+                    onsubmit="return confirm('¿Emitir/actualizar el cargo de este mes y notificar al cliente?');">
+                <input type="hidden" name="orden_id" value="<?= (int)$r['orden_id'] ?>">
+                <input type="hidden" name="periodo_inicio" value="<?= $iniMes ?>">
+                <input type="hidden" name="periodo_fin" value="<?= $finMes ?>">
+                <input type="hidden" name="periodo_mes" value="<?= (int)$m ?>">
+                <button class="btn btn-warning">
+                  <i class="bi bi-megaphone"></i> Emitir / Notificar
+                </button>
+              </form>
+            </div> <!-- /acciones -->
+          </div>   <!-- /d-flex -->
+        </div>     <!-- /card-body -->
+      </div>       <!-- /card -->
 
-          
-        </div>
-      </div>
-    </div>
     <?php endforeach; ?>
-  </div>
+  </div> <!-- /vstack -->
+
+  
 </div>

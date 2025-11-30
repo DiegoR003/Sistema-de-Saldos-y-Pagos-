@@ -1,3 +1,83 @@
+<?php
+// Public/login.php
+declare(strict_types=1);
+
+// Activar TODOS los errores
+error_reporting(E_ALL);
+ini_set('display_errors', '1');
+
+require_once __DIR__ . '/../App/bd.php';
+require_once __DIR__ . '/../App/auth.php';
+
+// si ya está logueado, mándalo al inicio
+if (current_user()) {
+    header('Location: /Sistema-de-Saldos-y-Pagos-/Public/index.php');
+    exit;
+}
+
+$pdo   = db();
+$error = '';
+$debug = ''; // Para depuración
+
+if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
+    $correo = trim($_POST['correo'] ?? '');
+    $pass   = $_POST['password'] ?? '';
+
+    $debug .= "Correo recibido: " . htmlspecialchars($correo) . "<br>";
+    $debug .= "Password recibido: " . (empty($pass) ? 'VACÍO' : 'CON VALOR') . "<br>";
+
+    if ($correo === '' || $pass === '') {
+        $error = 'Ingresa tu correo y contraseña.';
+    } else {
+        // Traemos usuario + roles
+        $st = $pdo->prepare("
+            SELECT
+              u.id,
+              u.nombre,
+              u.correo,
+              u.pass_hash,
+              u.activo,
+              GROUP_CONCAT(ur.rol_id) AS roles_csv
+            FROM usuarios u
+            LEFT JOIN usuario_rol ur ON ur.usuario_id = u.id
+            WHERE u.correo = ?
+            GROUP BY u.id
+            LIMIT 1
+        ");
+        $st->execute([$correo]);
+        $u = $st->fetch(PDO::FETCH_ASSOC);
+
+        $debug .= "Usuario encontrado: " . ($u ? 'SÍ' : 'NO') . "<br>";
+        
+        if ($u) {
+            $debug .= "Activo: " . ($u['activo'] ? 'SÍ' : 'NO') . "<br>";
+            $debug .= "Hash en BD: " . substr($u['pass_hash'], 0, 20) . "...<br>";
+            $debug .= "Verificación password: " . (password_verify($pass, $u['pass_hash']) ? 'CORRECTA' : 'INCORRECTA') . "<br>";
+        }
+
+        if (!$u || !(int)$u['activo']) {
+            $error = 'Usuario no encontrado o inactivo.';
+        } elseif (!password_verify($pass, $u['pass_hash'])) {
+            $error = 'Correo o contraseña incorrectos.';
+        } else {
+            // Login OK → guardamos en sesión
+            $_SESSION['user_id']      = (int)$u['id'];
+            $_SESSION['user_nombre']  = $u['nombre'];
+            $_SESSION['user_correo']  = $u['correo'];
+            $_SESSION['user_roles']   = $u['roles_csv']
+                ? array_map('intval', explode(',', $u['roles_csv']))
+                : [];
+
+            $debug .= "SESIÓN CREADA - Redirigiendo...<br>";
+            
+            header('Location: /Sistema-de-Saldos-y-Pagos-/Public/index.php');
+            exit;
+        }
+    }
+}
+?>
+
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -315,14 +395,29 @@ body { background:#fffbee; }
     <main class="page">
     <h1 class="brand">Sistema de Pagos</h1>
 
+      
+
     <section class="card" role="dialog" aria-labelledby="card-title">
       <div class="card-topbar"></div>
       <h2 id="card-title" class="card-title">Iniciar Sesión</h2>
 
-      <form class="form" action="index.php" action="#" method="post" novalidate>
+       <?php if ($error): ?>
+        <div style="background:#fee2e2;color:#991b1b;padding:10px;border-radius:4px;margin-bottom:12px;font-size:14px;text-align:center;">
+          <?= htmlspecialchars($error) ?>
+        </div>
+      <?php endif; ?>
+
+      <?php if ($debug && isset($_POST['correo'])): ?>
+        <div style="background:#fef3c7;color:#92400e;padding:10px;border-radius:4px;margin-bottom:12px;font-size:12px;">
+          <strong>Debug:</strong><br>
+          <?= $debug ?>
+        </div>
+      <?php endif; ?>
+
+      <form class="form"   method="post" novalidate>
         <label class="field with-icon-right">
           <span class="sr-only">Usuario o correo</span>
-          <input type="text" name="user" autocomplete="username" placeholder="Correo Electrónico" />
+          <input type="text" name="correo" autocomplete="username" placeholder="Correo Electrónico" required />
           <span class="icon" aria-hidden="true">
             <!-- envelope icon -->
             <svg viewBox="0 0 24 24" width="20" height="20">

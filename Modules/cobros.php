@@ -20,6 +20,14 @@ $stCli = $pdo->query("
 ");
 $clientes = $stCli->fetchAll(PDO::FETCH_ASSOC);
 
+
+
+/* =========================
+   Filtro "Mostrar" (rango de fechas)
+   ========================= */
+$rango = $_GET['rango'] ?? 'todos';   // valores: todos, hoy, 7dias, mes
+
+
 /* =========================
    Consulta de cobros
    ========================= */
@@ -29,6 +37,24 @@ $args  = [];
 if ($clienteId > 0) {
     $where .= " AND c.id = :cid";
     $args[':cid'] = $clienteId;
+}
+
+// filtro por rango de fechas usando cg.creado_en
+switch ($rango) {
+  case 'hoy':
+    $where .= " AND DATE(cg.creado_en) = CURDATE()";
+    break;
+
+  case '7dias':
+    $where .= " AND cg.creado_en >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)";
+    break;
+
+  case 'mes':
+    $where .= " AND YEAR(cg.creado_en) = YEAR(CURDATE())
+                AND MONTH(cg.creado_en) = MONTH(CURDATE())";
+    break;
+
+  // 'todos' => sin condición extra
 }
 
 $sql = "
@@ -97,6 +123,19 @@ function compress_paquete(string $itemsRaw, int $itemsCount, int $max = 2): stri
     }
     return $txt;
 }
+
+
+// helper para armar la URL manteniendo cliente_id
+function cobrosUrl(string $rangoValue, int $clienteId): string {
+    $base = "/Sistema-de-Saldos-y-Pagos-/Public/index.php?m=cobros&rango={$rangoValue}";
+    if ($clienteId > 0) {
+        $base .= "&cliente_id={$clienteId}";
+    }
+    return $base;
+}
+
+
+
 ?>
 
 <style>
@@ -153,6 +192,8 @@ function compress_paquete(string $itemsRaw, int $itemsCount, int $max = 2): stri
   }
 </style>
 
+
+
 <div class="container-fluid cobros">
   <!-- Título + acciones -->
   <div class="d-flex align-items-center justify-content-between flex-wrap topbar mb-3">
@@ -160,14 +201,35 @@ function compress_paquete(string $itemsRaw, int $itemsCount, int $max = 2): stri
 
     <div class="d-flex align-items-center gap-2">
       <div class="dropdown">
-        <button class="btn btn-light border dropdown-toggle" data-bs-toggle="dropdown" type="button">
-          Mostrar
-        </button>
-        <ul class="dropdown-menu dropdown-menu-end">
-          <li><a class="dropdown-item" href="#">Hoy</a></li>
-          <li><a class="dropdown-item" href="#">Últimos 7 días</a></li>
-          <li><a class="dropdown-item" href="#">Este mes</a></li>
-        </ul>
+         <button class="btn btn-light border dropdown-toggle" data-bs-toggle="dropdown" type="button">
+    Mostrar
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li>
+      <a class="dropdown-item <?= $rango === 'todos' ? 'active' : '' ?>"
+         href="<?= cobrosUrl('todos', $clienteId) ?>">
+        Todos
+      </a>
+    </li>
+    <li>
+      <a class="dropdown-item <?= $rango === 'hoy' ? 'active' : '' ?>"
+         href="<?= cobrosUrl('hoy', $clienteId) ?>">
+        Hoy
+      </a>
+    </li>
+    <li>
+      <a class="dropdown-item <?= $rango === '7dias' ? 'active' : '' ?>"
+         href="<?= cobrosUrl('7dias', $clienteId) ?>">
+        Últimos 7 días
+      </a>
+    </li>
+    <li>
+      <a class="dropdown-item <?= $rango === 'mes' ? 'active' : '' ?>"
+         href="<?= cobrosUrl('mes', $clienteId) ?>">
+        Este mes
+      </a>
+    </li>
+  </ul>
       </div>
     </div>
   </div>
