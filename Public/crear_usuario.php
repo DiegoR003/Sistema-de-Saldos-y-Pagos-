@@ -3,8 +3,8 @@ require_once __DIR__ . '/../App/bd.php';
 
 $pdo = db();
 
-$nombre = 'Leonel Pimentel';
-$correo = 'admin@bananagap.com';
+$nombre = 'Diego Rafael';
+$correo = 'admin@bananagroup.com';
 $password = 'admin123';
 
 // Generar hash

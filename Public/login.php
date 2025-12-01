@@ -407,12 +407,7 @@ body { background:#fffbee; }
         </div>
       <?php endif; ?>
 
-      <?php if ($debug && isset($_POST['correo'])): ?>
-        <div style="background:#fef3c7;color:#92400e;padding:10px;border-radius:4px;margin-bottom:12px;font-size:12px;">
-          <strong>Debug:</strong><br>
-          <?= $debug ?>
-        </div>
-      <?php endif; ?>
+     
 
       <form class="form"   method="post" novalidate>
         <label class="field with-icon-right">
