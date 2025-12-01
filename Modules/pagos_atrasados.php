@@ -172,7 +172,7 @@ function atrasadosUrl(string $vistaValue): string {
 
             <div class="actions d-flex align-items-start gap-2">
               <!-- Aquí tú puedes cambiar la URL/acción de cobro -->
-              <a href="/Sistema-de-Saldos-y-Pagos-/Public/index.php?m=cobro&orden_id=<?= (int)$r['orden_id'] ?>"
+              <a href="/Sistema-de-Saldos-y-Pagos-/Modules/cobro.php?m=cobro&orden_id=<?= (int)$r['orden_id'] ?>"
                  class="btn btn-sm btn-cobrar">
                 <i class="bi bi-cash-coin me-1"></i> Cobrar
               </a>
