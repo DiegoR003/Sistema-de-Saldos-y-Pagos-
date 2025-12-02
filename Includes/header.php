@@ -138,6 +138,8 @@ $notifCount = count(array_filter($notificaciones, fn($n) => !$n['leida']));
   display: inline-block;
   margin-right: 8px;
 }
+
+
 </style>
 
 <body class="layout">

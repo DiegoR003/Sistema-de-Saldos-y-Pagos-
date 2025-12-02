@@ -60,6 +60,7 @@ function fmt_fecha(?string $d): string {
     return date('d/m/Y', strtotime($d));
 }
 ?>
+
 <style>
 .usuarios-page .profile-header {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -135,6 +136,28 @@ function fmt_fecha(?string $d): string {
   font-weight: 600;
   background: linear-gradient(135deg, #f39c12, #e74c3c);
   color: white;
+}
+
+/* Responsive para móvil */
+@media (max-width: 575.98px) {
+  .usuarios-page .profile-header {
+    padding: 1.5rem 1rem;
+  }
+  .usuarios-page .avatar-big {
+    width: 80px;
+    height: 80px;
+    font-size: 2rem;
+  }
+  .usuarios-page .profile-header h3 {
+    font-size: 1.5rem;
+  }
+  .usuarios-page .table-usuarios {
+    font-size: 0.85rem;
+  }
+  .usuarios-page .table-usuarios th,
+  .usuarios-page .table-usuarios td {
+    padding: 0.5rem 0.25rem;
+  }
 }
 </style>
 

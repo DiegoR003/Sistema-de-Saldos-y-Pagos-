@@ -28,7 +28,7 @@ $menu_rep = [
 ];
 
 $menu_conf = [
-  ['slug'=>'usuarios','icon'=>'bi-person-gear','text'=>'Usuarios'],
+  ['slug'=>'usuarios','icon'=>'bi-person-gear','text'=>'Mi Perfil'],
 ];
 ?>
 

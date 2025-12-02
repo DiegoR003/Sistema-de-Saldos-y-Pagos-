@@ -138,6 +138,7 @@ foreach ($rows as $r) {
 }
 $noEfectivo = $totalCobrado - $efectivo;
 ?>
+
 <style>
 .corte-diario .filters .form-control,
 .corte-diario .filters .btn-go{

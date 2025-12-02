@@ -157,36 +157,42 @@ function fmt_date(?string $d): string {
   border-radius: 999px;
   padding: .15rem .6rem;
 }
-
 .clientes-page .estado-activo {
   background:#28a745;
   color:#fff;
 }
-
-.clientes-page .estado-sin-orden {
-  background:#6c757d;
-  color:#fff;
-}
-
 .clientes-page .estado-pendiente {
-  background:#ffc107;
-  color:#212529;
+  background:#f1c40f;
+  color:#000;
 }
 
+/* --- Responsivo --- */
+@media (max-width: 768px) {
+  .clientes-page .card-body {
+    padding: 0.75rem;
+  }
+  .clientes-page table {
+    font-size: .85rem;
+  }
+  .clientes-page .table-responsive {
+    overflow-x: auto;
+  }
+}
 </style>
 
 <div class="container-fluid clientes-page">
 
-  <div class="d-flex align-items-center justify-content-between topbar mb-3">
+  <div class="d-flex align-items-center justify-content-between mb-3">
     <h3 class="mb-0">Clientes</h3>
 
     <div class="dropdown">
-     <!-- <button class="btn btn-light border dropdown-toggle" type="button" data-bs-toggle="dropdown">
+      <button class="btn btn-light border dropdown-toggle" type="button" data-bs-toggle="dropdown">
         Mostrar
       </button>
       <ul class="dropdown-menu dropdown-menu-end">
         <li><a class="dropdown-item" href="?m=clientes">Todos</a></li>
-      </ul> -->
+        <!-- si luego agregas filtros por estado, los pones aquí -->
+      </ul>
     </div>
   </div>
 
@@ -199,7 +205,7 @@ function fmt_date(?string $d): string {
                class="form-control"
                name="q"
                placeholder="Nombre, correo o teléfono…"
-               value="<?= htmlspecialchars($q) ?>">
+               value="<?= htmlspecialchars($q ?? '') ?>">
         <button class="btn btn-danger btn-search" type="submit">
           <i class="bi bi-search me-1"></i> Buscar
         </button>
@@ -210,9 +216,9 @@ function fmt_date(?string $d): string {
   <!-- Tabla de clientes en proceso -->
   <div class="card border-0 shadow-sm">
     <div class="card-body">
-      <h5 class="mb-3"> Clientes en Proceso</h5>
+      <h5 class="mb-3">Clientes en Proceso</h5>
 
-      <?php if (!$rows): ?>
+      <?php if (empty($rows)): ?>
         <div class="alert alert-info mb-0">
           Aún no hay clientes con órdenes activas (o no hay coincidencias con la búsqueda).
         </div>
@@ -221,85 +227,72 @@ function fmt_date(?string $d): string {
       <div class="table-responsive">
         <table class="table align-middle mb-0">
           <thead>
-  <tr>
-    <th>Cliente</th>
-    <th class="d-none d-lg-table-cell">Correo</th>
-    <th class="d-none d-md-table-cell">Teléfono</th>
-    <th>Servicio</th>
-    <th class="d-none d-lg-table-cell">Periodo</th>
-    <th class="d-none d-md-table-cell">Próx. facturación</th>
-    <th>Estado</th>
-    <th class="text-end">Acciones</th>
-  </tr>
-</thead>
+            <tr>
+              <th>Cliente</th>
+              <th class="d-none d-lg-table-cell">Correo</th>
+              <th class="d-none d-md-table-cell">Teléfono</th>
+              <th>Servicio</th>
+              <th class="d-none d-lg-table-cell">Periodo</th>
+              <th class="d-none d-md-table-cell">Próx. facturación</th>
+              <th>Estado</th>
+              <th class="text-end">Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+          <?php foreach ($rows as $r): 
+            $activo        = (int)$r['ordenes_activas'] > 0;
+            $montoMensual  = (float)$r['mensual_base'];
+            $periodoTxt    = prettify_periodo($r);
+            $proximaTxt    = fmt_date($r['proxima_facturacion_activa'] ?? null);
+          ?>
+            <tr>
+              <td><?= htmlspecialchars($r['empresa']) ?></td>
 
-<tbody>
-<?php foreach ($rows as $r): 
-  $activo        = (int)$r['ordenes_activas'] > 0;
-  $montoMensual  = (float)$r['mensual_base'];             // sin IVA
-   $montoMensualConIVA = $montoMensual * 1.16;          // con IVA
-  $periodoTxt    = prettify_periodo($r);
+              <td class="d-none d-lg-table-cell">
+                <?= htmlspecialchars($r['correo']) ?>
+              </td>
 
-  // ¿Tiene próxima facturación calculada (next_run / proxima_facturacion)?
-  $hasProxima    = !empty($r['proxima_facturacion_activa']);
+              <td class="d-none d-md-table-cell">
+                <?= htmlspecialchars($r['telefono'] ?? '—') ?>
+              </td>
 
- $proximaTxt    = fmt_date($r['proxima_facturacion_activa'] ?? null);
-?>
+              <td>
+                <?php if ($montoMensual > 0): ?>
+                  Mensual <?= money_mx($montoMensual * 1.16) ?>
+                <?php else: ?>
+                  —
+                <?php endif; ?>
+              </td>
 
-  <tr>
-    <td><?= htmlspecialchars($r['empresa']) ?></td>
+              <td class="d-none d-lg-table-cell">
+                <?= htmlspecialchars($periodoTxt) ?>
+              </td>
 
-    <td class="d-none d-lg-table-cell">
-      <?= htmlspecialchars($r['correo']) ?>
-    </td>
+              <td class="d-none d-md-table-cell">
+                <?= htmlspecialchars($proximaTxt) ?>
+              </td>
 
-    <td class="d-none d-md-table-cell">
-      <?= htmlspecialchars($r['telefono'] ?? '—') ?>
-    </td>
+              <td>
+                <?php if ($activo): ?>
+                  <span class="estado-badge estado-activo">Activo</span>
+                <?php else: ?>
+                  <span class="estado-badge estado-pendiente">Pendiente</span>
+                <?php endif; ?>
+              </td>
 
-    <td>
-      <?php if ($montoMensual > 0): ?>
-        Mensual <?= money_mx($montoMensualConIVA) ?>
-      <?php else: ?>
-        —
-      <?php endif; ?>
-    </td>
-
-    <td class="d-none d-lg-table-cell">
-      <?= htmlspecialchars($periodoTxt) ?>
-    </td>
-
-    <td class="d-none d-md-table-cell">
-      <?= htmlspecialchars($proximaTxt) ?>
-    </td>
-
-  <td>
-  <?php if ($activo): ?>
-    <?php if ($hasProxima): ?>
-      <span class="estado-badge estado-activo">Activo</span>
-    <?php else: ?>
-      <span class="estado-badge estado-pendiente">Pendiente</span>
-    <?php endif; ?>
-  <?php else: ?>
-    <span class="estado-badge estado-sin-orden">Sin orden activa</span>
-  <?php endif; ?>
-</td>
-
-
-    <td class="text-end">
-      <?php if (!empty($r['orden_id'])): ?>
-        <a href="/Sistema-de-Saldos-y-Pagos-/Modules/cobro.php?m=cobro&orden_id=<?= (int)$r['orden_id'] ?>"
-           class="btn btn-primary btn-sm">
-          Cobrar
-        </a>
-      <?php else: ?>
-        <span class="text-muted small">Sin orden activa</span>
-      <?php endif; ?>
-    </td>
-  </tr>
-<?php endforeach; ?>
-</tbody>
-
+              <td class="text-end">
+                <?php if (!empty($r['orden_id'])): ?>
+                  <a href="/Sistema-de-Saldos-y-Pagos-/Modules/cobro.php?m=cobro&orden_id=<?= (int)$r['orden_id'] ?>"
+                    class="btn btn-primary btn-sm">
+                    Cobrar
+                  </a>
+                <?php else: ?>
+                  <span class="text-muted small">Sin orden activa</span>
+                <?php endif; ?>
+              </td>
+            </tr>
+          <?php endforeach; ?>
+          </tbody>
         </table>
       </div>
 
@@ -308,3 +301,4 @@ function fmt_date(?string $d): string {
   </div>
 
 </div>
+
