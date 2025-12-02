@@ -7,6 +7,20 @@ if (!defined('BASE_URL')) {
     define('BASE_URL', $guess ?: '/');
   }
 }
+
+// Obtener usuario actual
+require_once __DIR__ . '/../App/auth.php';
+$currentUser = current_user();
+$userName = $currentUser['nombre'] ?? 'Usuario';
+$userInitial = mb_substr($userName, 0, 1, 'UTF-8');
+
+// Notificaciones (simuladas por ahora - luego conectas con BD)
+$notificaciones = [
+  ['texto' => 'Nuevo pago recibido de Dolcevilla', 'hace' => 'Hace 5 min', 'leida' => false],
+  ['texto' => 'Cotización pendiente de aprobar', 'hace' => 'Hace 1 hora', 'leida' => false],
+  ['texto' => 'Recordatorio: Factura vence mañana', 'hace' => 'Hace 3 horas', 'leida' => true],
+];
+$notifCount = count(array_filter($notificaciones, fn($n) => !$n['leida']));
 ?>
 <!doctype html>
 <html lang="es">
@@ -16,67 +30,113 @@ if (!defined('BASE_URL')) {
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
-  <link href="./css/app.css?v=999" rel="stylesheet"><!-- relativo a /Public -->
+  <link href="./css/app.css?v=999" rel="stylesheet">
 </head>
 
 <style>
-/* Logo fijo arriba-izquierda  */
-.login-logo img{ height:60px; display:block; }
+/* Logo */
+.navbar-brand img { height: 50px; }
 
-/* ===== Estilo del botón "pill" del usuario ===== */
-.user-pill{
-  /* colores base */
+/* Botón usuario pill */
+.user-pill {
   --bs-btn-color: #1a1a1a;
-  --bs-btn-bg: rgba(0,0,0,.15);
+  --bs-btn-bg: rgba(0,0,0,.08);
   --bs-btn-border-color: transparent;
-
-  /* hover (iluminado) */
   --bs-btn-hover-color: #000;
-  --bs-btn-hover-bg: #fdd835;          /* amarillo hover */
+  --bs-btn-hover-bg: #fdd835;
   --bs-btn-hover-border-color: transparent;
-
-  /* active (click presionado) */
-  --bs-btn-active-color: #000;
-  --bs-btn-active-bg: #fbc02d;         /* amarillo más oscuro */
-  --bs-btn-active-border-color: transparent;
-
-  transition: all .25s ease;
+  transition: all .2s ease;
+  font-size: 0.9rem;
+  padding: 0.4rem 1rem;
 }
-.user-pill:hover{
-  transform: translateY(-2px);
-  box-shadow: 0 6px 18px rgba(0,0,0,.08);
+.user-pill:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0,0,0,.1);
 }
-
-/* avatar dentro del pill */
-.user-pill .avatar-circle{
-  background: rgba(0,0,0,.2);
-  transition: background .25s ease;
-}
-.user-pill:hover .avatar-circle,
-.user-pill:focus .avatar-circle{
-  background: rgba(255,255,255,.35);
+.user-pill .avatar-circle {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #f39c12, #e74c3c);
+  color: white;
+  font-weight: 600;
+  font-size: 0.85rem;
 }
 
-/* ===== Dropdown del usuario ===== */
-.navbar .dropdown{ position: relative; }     /* referencia de posición */
-.navbar .dropdown .user-menu{
-  --bs-dropdown-min-width: 0;                /* sin mínimo de Bootstrap */
-  width: 100%;                               /* mismo ancho que el botón */
-  background-color: #fffbea;                 /* fondo del menú */
+/* Dropdown usuario */
+.user-menu {
+  min-width: 200px !important;
+  background: #fffbea;
   border-color: rgba(0,0,0,.1);
 }
-.user-menu .dropdown-item{
-  color:#111;
-  transition: background-color .2s ease, color .2s ease;
+.user-menu .dropdown-item:hover {
+  background: #fdd835;
+  color: #000;
 }
-.user-menu .dropdown-item:hover,
-.user-menu .dropdown-item:focus{
-  background-color:#fdd835;                  /* mismo amarillo del hover */
-  color:#000;
+
+/* Campanita de notificaciones */
+.notif-bell {
+  position: relative;
+  background: rgba(0,0,0,.08);
+  border: none;
+  border-radius: 50%;
+  width: 42px;
+  height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all .2s ease;
+  color: #333;
 }
-/* cerrar sesión con estilo */
-.user-menu .dropdown-item.text-danger:hover{
-  color:#b00020;
+.notif-bell:hover {
+  background: #fdd835;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0,0,0,.1);
+}
+.notif-bell::after {
+  display: none !important; /* Quita la flechita del dropdown */
+}
+.notif-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  background: #e74c3c;
+  color: white;
+  border-radius: 10px;
+  padding: 2px 6px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  min-width: 20px;
+  text-align: center;
+}
+.notif-menu {
+  min-width: 340px !important;
+  max-height: 400px;
+  overflow-y: auto;
+}
+.notif-item {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid rgba(0,0,0,.05);
+  transition: background .2s;
+  cursor: pointer;
+}
+.notif-item:hover {
+  background: rgba(253, 216, 53, 0.1);
+}
+.notif-item.unread {
+  background: rgba(253, 216, 53, 0.05);
+}
+.notif-item.unread::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  background: #e74c3c;
+  border-radius: 50%;
+  display: inline-block;
+  margin-right: 8px;
 }
 </style>
 
@@ -86,41 +146,74 @@ if (!defined('BASE_URL')) {
       <button class="btn btn-link text-dark d-lg-none p-0 me-2"
               type="button"
               data-bs-toggle="offcanvas"
-              data-bs-target="#mobileSidebar"
-              aria-controls="mobileSidebar"
-              aria-label="Menú">
+              data-bs-target="#mobileSidebar">
         <i class="bi bi-list fs-2"></i>
       </button>
 
-      
-      <a class="navbar-brand brand m-0 d-flex align-items-center" href="<?= BASE_URL ?>/index.php?m=inicio">
-        <img src="./assets/logo.png" alt="Banana Group" style="height:60px;">
+      <a class="navbar-brand m-0" href="<?= BASE_URL ?>/index.php?m=inicio">
+        <img src="./assets/logo.png" alt="Banana Group">
       </a>
 
+      <div class="ms-auto d-flex align-items-center gap-2">
+        <!-- Campanita notificaciones -->
+        <div class="dropdown">
+          <button class="notif-bell" 
+                  type="button" 
+                  id="dropdownNotificaciones"
+                  data-bs-toggle="dropdown" 
+                  data-bs-auto-close="outside"
+                  aria-expanded="false">
+            <i class="bi bi-bell fs-5"></i>
+            <?php if ($notifCount > 0): ?>
+              <span class="notif-badge"><?= $notifCount ?></span>
+            <?php endif; ?>
+          </button>
+          <ul class="dropdown-menu dropdown-menu-end notif-menu shadow" aria-labelledby="dropdownNotificaciones">
+            <li class="px-3 py-2 border-bottom">
+              <div class="d-flex justify-content-between align-items-center">
+                <span class="fw-semibold">Notificaciones</span>
+                <?php if ($notifCount > 0): ?>
+                  <span class="badge bg-danger rounded-pill"><?= $notifCount ?></span>
+                <?php endif; ?>
+              </div>
+            </li>
+            <?php if (empty($notificaciones)): ?>
+              <li class="text-center py-4 text-muted small">No hay notificaciones</li>
+            <?php else: ?>
+              <?php foreach ($notificaciones as $n): ?>
+                <li class="notif-item <?= !$n['leida'] ? 'unread' : '' ?>">
+                  <div class="small fw-semibold mb-1"><?= htmlspecialchars($n['texto']) ?></div>
+                  <div class="text-muted" style="font-size: 0.75rem;"><?= htmlspecialchars($n['hace']) ?></div>
+                </li>
+              <?php endforeach; ?>
+            <?php endif; ?>
+            <li class="text-center py-2 border-top">
+              <a href="#" class="small text-decoration-none">Ver todas</a>
+            </li>
+          </ul>
+        </div>
 
-      <!-- Usuario -->
-      <div class="ms-auto dropdown">
-        <button
-          id="userDropdown"
-          class="btn rounded-pill px-3 d-flex align-items-center gap-2 dropdown-toggle user-pill"
-          type="button"
-          data-bs-toggle="dropdown"
-          data-bs-display="static"
-          aria-expanded="false"
-          aria-haspopup="true">
-          <span class="avatar-circle"><i class="bi bi-person-fill"></i></span>
-          <span>Leonel Pimentel Agundez</span>
-        </button>
-
-        <ul class="dropdown-menu dropdown-menu-end user-menu" aria-labelledby="userDropdown">
-          <li><a class="dropdown-item text-danger" href="logout.php">Cerrar sesión</a></li>
-        </ul>
+        <!-- Usuario -->
+        <div class="dropdown">
+          <button class="btn rounded-pill user-pill dropdown-toggle d-flex align-items-center gap-2"
+                  type="button" 
+                  id="dropdownUsuario"
+                  data-bs-toggle="dropdown"
+                  aria-expanded="false">
+            <div class="avatar-circle"><?= strtoupper($userInitial) ?></div>
+            <span class="d-none d-md-inline"><?= htmlspecialchars($userName) ?></span>
+          </button>
+          <ul class="dropdown-menu dropdown-menu-end user-menu shadow" aria-labelledby="dropdownUsuario">
+            <li><a class="dropdown-item" href="?m=usuarios"><i class="bi bi-person me-2"></i>Mi perfil</a></li>
+            <li><hr class="dropdown-divider"></li>
+            <li><a class="dropdown-item text-danger" href="logout.php"><i class="bi bi-box-arrow-right me-2"></i>Cerrar sesión</a></li>
+          </ul>
+        </div>
       </div>
     </div>
   </nav>
 
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-  
+  <!-- ✅ Script de Bootstrap AL FINAL del body -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
