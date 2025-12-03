@@ -3,7 +3,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../../App/bd.php';
 require_once __DIR__ . '/../../App/billing_rules.php';
-require_once __DIR__ . '/../../App/notificacion.php';
+require_once __DIR__ . '/App/notifications.php';
 
 function back(string $msg, bool $ok): never {
   $url = '/Sistema-de-Saldos-y-Pagos-/Public/index.php?m=cotizaciones';
@@ -192,55 +192,20 @@ try {
     }
   }
 
-  // ✅ COMMIT PRIMERO - antes de notificaciones
+  // ✅ COMMIT antes de notificaciones
   $pdo->commit();
 
-  // ==========================
-  // NOTIFICACIONES (DESPUÉS del commit exitoso)
-  // ==========================
+  // ✅ Notificaciones DESPUÉS del commit
   try {
-    $clienteNombre  = $cot['empresa'] ?? 'Cliente';
-    $clienteCorreo  = $cot['correo']  ?? '';
-    $folio          = $cot['folio']   ?? ('COT-'.str_pad((string)$id, 5, '0', STR_PAD_LEFT));
-
-    $tituloAdminOp  = "Cotización $folio aprobada";
-    $cuerpoAdminOp  = "La cotización $folio del cliente {$clienteNombre} ha sido aprobada.";
-
-    // Notificar a admin y operador
-    notificar_roles(
-        $pdo,
-        ['admin','operador'],
-        $tituloAdminOp,
-        $cuerpoAdminOp,
-        'cotizacion',
-        $id
-    );
-
-    // Notificar al cliente
-    if (!empty($clienteId) && !empty($clienteCorreo)) {
-        $tituloCli = "Tu cotización $folio fue aprobada";
-        $cuerpoCli = "Hola {$clienteNombre}, tu cotización $folio ha sido aprobada y se ha creado tu orden de servicio.";
-
-        notificar_cliente(
-            $pdo,
-            (int)$clienteId,
-            $clienteCorreo,
-            $tituloCli,
-            $cuerpoCli,
-            'cotizacion',
-            $id
-        );
-    }
+    notificar_cotizacion_estado($pdo, $id, 'aprobada');
   } catch (Throwable $e) {
-    // Si falla la notificación, solo loguea pero no interrumpas el flujo
-    error_log("Error al enviar notificaciones: " . $e->getMessage());
+    error_log('Error notificando cotización aprobada: '.$e->getMessage());
   }
 
-  // Respuesta exitosa
+  // ✅ Redirección correcta
   back('Cotización aprobada', true);
 
 } catch (Throwable $e) {
-  // Solo hace rollback si la transacción está activa
   if (isset($pdo) && $pdo->inTransaction()) {
     $pdo->rollBack();
   }

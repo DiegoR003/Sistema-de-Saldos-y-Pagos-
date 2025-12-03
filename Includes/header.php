@@ -24,14 +24,40 @@ $notificaciones = [
 $notifCount = count(array_filter($notificaciones, fn($n) => !$n['leida']));
 
 
+
 $usuarioId  = $_SESSION['usuario_id'] ?? 0;
 $usuarioRol = $_SESSION['usuario_rol'] ?? 'guest';
 
 // Config Pusher (ya la tienes en tu archivo de config)
 $pusherCfg = require __DIR__ . '/../App/pusher_config.php';
 
-$notifCount      = 0;
-$notificaciones  = [];
+// antes de la vista, cuando ya tienes $pdo y $userId
+$notifCount = 0;
+$notificaciones = [];
+
+if ($usuarioId) {
+    $sqlNotif = "
+      SELECT id, titulo, cuerpo, leida_en, creado_en
+      FROM notificaciones
+      WHERE tipo = 'interna'
+        AND canal = 'sistema'
+        AND (usuario_id IS NULL OR usuario_id = :uid)
+      ORDER BY creado_en DESC
+      LIMIT 10
+    ";
+    $stNotif = $pdo->prepare($sqlNotif);
+    $stNotif->execute([':uid' => $usuarioId]);
+    $notificaciones = $stNotif->fetchAll(PDO::FETCH_ASSOC);
+
+    $notifCount = 0;
+    foreach ($notificaciones as $n) {
+        if (empty($n['leida_en'])) {
+            $notifCount++;
+        }
+    }
+}
+
+
 
 // Función helper para "hace 3 min", "hace 2 horas", etc.
 function tiempo_hace_es(?string $fecha): string {
@@ -81,6 +107,8 @@ if ($usuarioId) {
         ];
     }
 }
+
+
 ?>
 <!doctype html>
 <html lang="es">

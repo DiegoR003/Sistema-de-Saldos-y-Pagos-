@@ -69,8 +69,6 @@ $rows = $st->fetchAll();
 $totalRows = $totalRows ?? 0;
 
 
-$esPendiente = ($r['estado'] === 'pendiente');
-
 /* -------- Helpers -------- */
 function money($n){ return '$'.number_format((float)$n,2); }
 function folio($id){ return 'COT-'.str_pad((string)$id,5,'0',STR_PAD_LEFT); }
@@ -319,46 +317,48 @@ $qs = $_GET; unset($qs['p']);
     <hr>
 
   
-     <!-- Editar conceptos (collapse) -->
-   <!-- ===== Editar conceptos (contenedor autocontenido) ===== -->
+    <!-- ===== Editar conceptos (contenedor autocontenido) ===== -->
 <div class="card mb-3" id="boxEditarConceptos">
-  <?php if ($editable): ?>
   <div class="card-header d-flex align-items-center justify-content-between">
     <strong class="m-0">Editar conceptos</strong>
-    <button class="btn btn-sm btn-light" id="btnToggleEdit" type="button" aria-expanded="false" aria-controls="editCollapse">
+    <button class="btn btn-sm btn-light" id="btnToggleEdit" type="button"
+            aria-expanded="false" aria-controls="editCollapse">
       <span class="me-1">Mostrar</span>
       <i class="bi bi-chevron-down" id="chevronEdit"></i>
     </button>
   </div>
+
   <div id="editCollapse" class="collapse">
     <div class="card-body">
       <!-- Aquí se pinta tu acordeón -->
-      <div class="accordion" id="accordionConceptos" ></div>
-      <div class="form-text">Toca un concepto, elige la opción y ajusta el tipo de cobro; se recalcula automáticamente.</div>
+      <div class="accordion" id="accordionConceptos"></div>
+      <div class="form-text">
+        Toca un concepto, elige la opción y ajusta el tipo de cobro; se recalcula automáticamente.
+      </div>
       <!-- Si usas el JSON oculto para aprobar -->
       <input type="hidden" name="billing_json" id="billingJson">
     </div>
   </div>
-  <?php else: ?>
-    <span class="dropdown-item text-muted small" style="pointer-events:none;">
-      Esta Cotización Ya Ha Sido Aprobada/Rechazada
-    </span>
-  <?php endif; ?>
+
+  <!-- Mensaje cuando NO es editable (aprobada / rechazada) -->
+  <div class="card-body text-muted small d-none" id="msgNoEditable">
+    Esta Cotización Ya Ha Sido Aprobada/Rechazada
+  </div>
 </div>
+
 
 
 
  <!-- Selector de RFC de la empresa (emisor) -->
 <div class="mb-3">
-  <?php if ($editable): ?>
   <label for="aprRfc" class="form-label">RFC emisor (para facturar)</label>
-  <select id="aprRfc" class="form-select">
+  <select id="aprRfc" class="form-select" disabled>
     <option value="">Cargando RFCs…</option>
   </select>
   <input type="hidden" name="rfc_id" id="aprRfcId" value="">
   <div class="form-text">Selecciona el RFC de la empresa con el que se emitirá la factura.</div>
-  <?php endif; ?>
 </div>
+
 
 
 
@@ -370,13 +370,13 @@ $qs = $_GET; unset($qs['p']);
     <input type="hidden" name="billing_json" id="billingJson">
     <!-- ✅ Este es el input que debe tener el valor del RFC -->
     <input type="hidden" name="rfc_id" id="aprRfcIdHidden">
-    <button class="btn btn-success" id="btnApr" type="submit" <?= $esPendiente ? '' : 'disabled' ?>>Aprobar</button>
+    <button class="btn btn-success" id="btnApr" type="submit" disabled>Aprobar</button>
   </form>
 
   <form id="fRej" method="post" action="/Sistema-de-Saldos-y-Pagos-/Public/api/cotizacion_reject.php"
         onsubmit="return confirm('¿Rechazar esta cotización?');">
     <input type="hidden" name="id" id="rejId">
-    <button class="btn btn-outline-danger" id="btnRej" <?= $esPendiente ? '' : 'disabled' ?>>Rechazar</button>
+    <button class="btn btn-outline-danger" id="btnRej" disabled>Rechazar</button>
   </form>
 </div>
 <script>
@@ -445,36 +445,39 @@ $qs = $_GET; unset($qs['p']);
 
   // ============= Pintado cabecera / items / totales =============
   function fillHeader(d){
-    $('#dFolio').textContent   = d.folio || ('COT-'+String(d.id).padStart(5,'0'));
-    $('#dCliente').textContent = d.empresa || '—';
-    $('#dCorreo').textContent  = d.correo  || '—';
-    $('#dFecha').textContent   = d.fecha   || '—';
+  $('#dFolio').textContent   = d.folio || ('COT-'+String(d.id).padStart(5,'0'));
+  $('#dCliente').textContent = d.empresa || '—';
+  $('#dCorreo').textContent  = d.correo  || '—';
+  $('#dFecha').textContent   = d.fecha   || '—';
 
-    // IDs para aprobar/rechazar
-    $('#aprId').value = d.id;
-    $('#rejId').value = d.id;
+  // IDs para aprobar/rechazar
+  $('#aprId').value = d.id;
+  $('#rejId').value = d.id;
 
-    // periodicidad (si aplica)
-    if (d.periodicidad) {
-      const per = $('#aprPer');
-      if (per) per.value = d.periodicidad;
+  // habilitar/inhabilitar botones según estado
+  const pend   = (d.estado === 'pendiente');
+  const btnApr = $('#btnApr');
+  const btnRej = $('#btnRej');
+  if (btnApr) btnApr.disabled = !pend;
+  if (btnRej) btnRej.disabled = !pend;
+
+  // RFC emisor sólo editable si está pendiente
+  const rfcSel = $('#aprRfc');
+  if (rfcSel) rfcSel.disabled = !pend;
+
+  // Mensaje "ya aprobada/rechazada"
+  const msgNoEdit   = $('#msgNoEditable');
+  const btnToggleEd = $('#btnToggleEdit');
+  if (msgNoEdit) {
+    if (pend) {
+      msgNoEdit.classList.add('d-none');
+      if (btnToggleEd) btnToggleEd.disabled = false;
+    } else {
+      msgNoEdit.classList.remove('d-none');
+      if (btnToggleEd) btnToggleEd.disabled = true;
     }
-
-    // habilitar/inhabilitar botones si no está pendiente
-    const pend  = (d.estado === 'pendiente');
-    const btnApr = $('#btnApr');
-    const btnRej = $('#btnRej');
-    if (btnApr) btnApr.disabled = !pend;
-    if (btnRej) btnRej.disabled = !pend;
-
-    // inhabilitar botones si está aprobado / rechazado
-     const estatus  = (d.estado === 'aprobada' || d.estado === 'rechazada');
-     const rfc = $('#aprRfc');
-     const conceptos = $('#boxEditarConceptos');
-
-     if (rfc) rfc.disabled = !estatus;
-    if (conceptos) conceptos.disabled = !estatus;
   }
+}
 
   function fillItems(d){
     const tb = $('#dItems');

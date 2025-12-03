@@ -1,6 +1,7 @@
 <?php
 // Public/api/cotizacion_create.php
 require_once __DIR__ . '/../../App/bd.php';
+require_once __DIR__.'/../../App/notifications.php';
 
 function pick($k,$d=''){
   return isset($_POST[$k]) ? (is_array($_POST[$k])?$_POST[$k]:trim((string)$_POST[$k])) : $d;
