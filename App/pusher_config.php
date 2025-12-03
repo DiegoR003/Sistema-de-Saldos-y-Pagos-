@@ -12,14 +12,14 @@ function pusher_client(): Pusher {
 
     // OJO: estos datos los sacas del panel de Pusher
     $options = [
-        'cluster' => 'tu_cluster',   // ej: 'mt1'
+        'cluster' => 'us2',   // ej: 'mt1'
         'useTLS'  => true,
     ];
 
     $pusher = new Pusher(
-        'TU_APP_KEY',   // key
-        'TU_APP_SECRET',// secret
-        'TU_APP_ID',    // app_id
+        '186671ef6532c0880f60',   // key
+        '581f3c6fa1faadf02422',// secret
+        '2086047',    // app_id
         $options
     );
 
