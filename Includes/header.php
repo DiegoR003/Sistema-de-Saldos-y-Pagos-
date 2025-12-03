@@ -97,7 +97,7 @@ $notifCount = count(array_filter($notificaciones, fn($n) => !$n['leida']));
   box-shadow: 0 4px 12px rgba(0,0,0,.1);
 }
 .notif-bell::after {
-  display: none !important; /* Quita la flechita del dropdown */
+  display: none !important;
 }
 .notif-badge {
   position: absolute;
@@ -112,11 +112,17 @@ $notifCount = count(array_filter($notificaciones, fn($n) => !$n['leida']));
   min-width: 20px;
   text-align: center;
 }
+
+/* Menu de notificaciones - Desktop */
 .notif-menu {
   min-width: 340px !important;
   max-height: 400px;
   overflow-y: auto;
+  background: white;
+  border-radius: 0.5rem;
+  box-shadow: 0 4px 12px rgba(0,0,0,.15);
 }
+
 .notif-item {
   padding: 0.75rem 1rem;
   border-bottom: 1px solid rgba(0,0,0,.05);
@@ -139,7 +145,79 @@ $notifCount = count(array_filter($notificaciones, fn($n) => !$n['leida']));
   margin-right: 8px;
 }
 
+/* Responsive para móvil */
+@media (max-width: 768px) {
+  .navbar-brand img {
+    height: 40px;
+  }
+  
+  /* Notificaciones en móvil - ancho ajustado */
+  .notif-menu {
+    min-width: 280px !important;
+    max-width: calc(100vw - 32px) !important;
+    max-height: 60vh;
+    right: -8px !important;
+    left: auto !important;
+  }
+  
+  .notif-item {
+    padding: 0.65rem 0.75rem;
+  }
+  
+  .notif-item .small {
+    font-size: 0.8rem !important;
+  }
+  
+  .notif-item .text-muted {
+    font-size: 0.7rem !important;
+  }
+  
+  /* Usuario en móvil */
+  .user-pill {
+    padding: 0.35rem 0.75rem;
+    font-size: 0.85rem;
+  }
+  
+  .user-pill .avatar-circle {
+    width: 28px;
+    height: 28px;
+    font-size: 0.75rem;
+  }
+  
+  .user-menu {
+    min-width: 180px !important;
+  }
+  
+  /* Botones de notificación y usuario */
+  .notif-bell {
+    width: 38px;
+    height: 38px;
+  }
+  
+  .notif-bell i {
+    font-size: 1.1rem;
+  }
+  
+  .notif-badge {
+    top: -2px;
+    right: -2px;
+    padding: 1px 5px;
+    font-size: 0.65rem;
+    min-width: 18px;
+  }
+}
 
+/* Para pantallas muy pequeñas */
+@media (max-width: 375px) {
+  .notif-menu {
+    min-width: 260px !important;
+    max-width: calc(100vw - 24px) !important;
+  }
+  
+  .notif-item {
+    padding: 0.5rem;
+  }
+}
 </style>
 
 <body class="layout">
@@ -158,42 +236,51 @@ $notifCount = count(array_filter($notificaciones, fn($n) => !$n['leida']));
 
       <div class="ms-auto d-flex align-items-center gap-2">
         <!-- Campanita notificaciones -->
-        <div class="dropdown">
-          <button class="notif-bell" 
-                  type="button" 
-                  id="dropdownNotificaciones"
-                  data-bs-toggle="dropdown" 
-                  data-bs-auto-close="outside"
-                  aria-expanded="false">
-            <i class="bi bi-bell fs-5"></i>
-            <?php if ($notifCount > 0): ?>
-              <span class="notif-badge"><?= $notifCount ?></span>
-            <?php endif; ?>
-          </button>
-          <ul class="dropdown-menu dropdown-menu-end notif-menu shadow" aria-labelledby="dropdownNotificaciones">
-            <li class="px-3 py-2 border-bottom">
-              <div class="d-flex justify-content-between align-items-center">
-                <span class="fw-semibold">Notificaciones</span>
-                <?php if ($notifCount > 0): ?>
-                  <span class="badge bg-danger rounded-pill"><?= $notifCount ?></span>
-                <?php endif; ?>
-              </div>
-            </li>
-            <?php if (empty($notificaciones)): ?>
-              <li class="text-center py-4 text-muted small">No hay notificaciones</li>
-            <?php else: ?>
-              <?php foreach ($notificaciones as $n): ?>
-                <li class="notif-item <?= !$n['leida'] ? 'unread' : '' ?>">
-                  <div class="small fw-semibold mb-1"><?= htmlspecialchars($n['texto']) ?></div>
-                  <div class="text-muted" style="font-size: 0.75rem;"><?= htmlspecialchars($n['hace']) ?></div>
-                </li>
-              <?php endforeach; ?>
-            <?php endif; ?>
-            <li class="text-center py-2 border-top">
-              <a href="#" class="small text-decoration-none">Ver todas</a>
-            </li>
-          </ul>
-        </div>
+<div class="dropdown">
+  <button class="notif-bell" 
+          type="button" 
+          id="dropdownNotificaciones"
+          data-bs-toggle="dropdown" 
+          data-bs-auto-close="outside"
+          aria-expanded="false">
+    <i class="bi bi-bell"></i>
+    <?php if ($notifCount > 0): ?>
+      <span class="notif-badge"><?= $notifCount ?></span>
+    <?php endif; ?>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end notif-menu" aria-labelledby="dropdownNotificaciones">
+    <li class="px-3 py-2 border-bottom bg-light">
+      <div class="d-flex justify-content-between align-items-center">
+        <span class="fw-semibold small">Notificaciones</span>
+        <?php if ($notifCount > 0): ?>
+          <span class="badge bg-danger rounded-pill"><?= $notifCount ?></span>
+        <?php endif; ?>
+      </div>
+    </li>
+    <?php if (empty($notificaciones)): ?>
+      <li class="text-center py-4 text-muted small">
+        <i class="bi bi-bell-slash d-block mb-2" style="font-size: 2rem; opacity: 0.3;"></i>
+        No hay notificaciones
+      </li>
+    <?php else: ?>
+      <?php foreach ($notificaciones as $n): ?>
+        <li class="notif-item <?= !$n['leida'] ? 'unread' : '' ?>">
+          <div class="small fw-semibold mb-1" style="line-height: 1.3;">
+            <?= htmlspecialchars($n['texto']) ?>
+          </div>
+          <div class="text-muted" style="font-size: 0.75rem;">
+            <i class="bi bi-clock me-1"></i><?= htmlspecialchars($n['hace']) ?>
+          </div>
+        </li>
+      <?php endforeach; ?>
+    <?php endif; ?>
+    <li class="text-center py-2 border-top bg-light">
+      <a href="#" class="small text-decoration-none text-primary fw-semibold">
+        Ver todas <i class="bi bi-arrow-right"></i>
+      </a>
+    </li>
+  </ul>
+</div>
 
         <!-- Usuario -->
         <div class="dropdown">

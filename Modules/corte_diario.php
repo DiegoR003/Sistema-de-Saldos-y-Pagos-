@@ -150,6 +150,41 @@ $noEfectivo = $totalCobrado - $efectivo;
 }
 .corte-diario .filters .btn-go:hover{filter:brightness(.95);}
 .corte-diario .card-header{font-weight:600;}
+
+/* Cards móvil para corte diario */
+.corte-diario .cobro-card {
+  display: none;
+  background: white;
+  border-radius: 0.75rem;
+  padding: 1rem;
+  margin-bottom: 0.75rem;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  border-left: 4px solid #fdd835;
+}
+.corte-diario .cobro-card .folio {
+  font-weight: 700;
+  font-size: 1.05rem;
+  margin-bottom: 0.5rem;
+  color: #1a202c;
+}
+.corte-diario .cobro-card .info-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.35rem 0;
+  border-bottom: 1px solid #f0f0f0;
+  font-size: 0.9rem;
+}
+.corte-diario .cobro-card .info-row:last-child { border-bottom: none; }
+.corte-diario .cobro-card .label { color: #6b7280; font-weight: 500; }
+.corte-diario .cobro-card .value { font-weight: 600; text-align: right; }
+
+@media (max-width: 768px) {
+  .corte-diario .table-wrap { display: none; }
+  .corte-diario .cobro-card { display: block; }
+  .corte-diario .filters .row { flex-direction: column; }
+  .corte-diario .filters .col-12 { width: 100% !important; max-width: 100% !important; }
+  .corte-diario .filters .btn-go { margin-top: 0.5rem; }
+}
 </style>
 
 <div class="container-fluid corte-diario">
@@ -258,6 +293,35 @@ $noEfectivo = $totalCobrado - $efectivo;
       </table>
     </div>
   </div>
+
+  <!-- Cards móvil -->
+<div>
+  <?php foreach ($rows as $r): ?>
+    <div class="cobro-card">
+      <div class="folio">Folio: <?= htmlspecialchars($r['folio']) ?></div>
+      
+      <div class="info-row">
+        <span class="label">Cliente:</span>
+        <span class="value"><?= htmlspecialchars($r['cliente']) ?></span>
+      </div>
+      
+      <div class="info-row">
+        <span class="label">Importe:</span>
+        <span class="value"><?= money_mx($r['importe']) ?></span>
+      </div>
+      
+      <div class="info-row">
+        <span class="label">Método:</span>
+        <span class="value"><?= htmlspecialchars(strtoupper($r['metodo'] ?? '—')) ?></span>
+      </div>
+      
+      <div class="info-row">
+        <span class="label">Fecha:</span>
+        <span class="value"><?= htmlspecialchars(fmt_fecha_humano($r['fecha_pago'])) ?></span>
+      </div>
+    </div>
+  <?php endforeach; ?>
+</div>
 
   <!-- Resumen del corte -->
   <div class="row g-3">

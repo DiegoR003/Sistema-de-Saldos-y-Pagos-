@@ -139,7 +139,7 @@ function fmt_fecha(?string $d): string {
 }
 
 /* Responsive para móvil */
-@media (max-width: 575.98px) {
+@media (max-width: 768px) {
   .usuarios-page .profile-header {
     padding: 1.5rem 1rem;
   }
@@ -151,12 +151,59 @@ function fmt_fecha(?string $d): string {
   .usuarios-page .profile-header h3 {
     font-size: 1.5rem;
   }
-  .usuarios-page .table-usuarios {
-    font-size: 0.85rem;
+  
+  /* Tabla responsive - modo cards */
+  .usuarios-page .table-responsive {
+    display: block;
   }
-  .usuarios-page .table-usuarios th,
+  .usuarios-page .table-usuarios thead {
+    display: none;
+  }
+  .usuarios-page .table-usuarios,
+  .usuarios-page .table-usuarios tbody,
+  .usuarios-page .table-usuarios tr,
   .usuarios-page .table-usuarios td {
-    padding: 0.5rem 0.25rem;
+    display: block;
+    width: 100%;
+  }
+  .usuarios-page .table-usuarios tr {
+    background: #fff;
+    border: 1px solid #e9ecef;
+    border-radius: .75rem;
+    padding: .75rem;
+    margin-bottom: .75rem;
+    box-shadow: 0 2px 4px rgba(0,0,0,.05);
+  }
+  .usuarios-page .table-usuarios td {
+    border: 0;
+    border-bottom: 1px solid #f1f3f5;
+    position: relative;
+    padding: .5rem 0 .5rem 8rem;
+    white-space: normal;
+    text-align: right;
+  }
+  .usuarios-page .table-usuarios td:last-child {
+    border-bottom: 0;
+  }
+  .usuarios-page .table-usuarios td::before {
+    content: attr(data-label);
+    position: absolute;
+    left: 0;
+    top: .5rem;
+    width: 7.5rem;
+    font-weight: 600;
+    color: #6b7280;
+    text-align: left;
+    font-size: .85rem;
+  }
+  /* Primera celda (avatar) sin label */
+  .usuarios-page .table-usuarios td:first-child {
+    padding: 0;
+    text-align: center;
+    margin-bottom: .5rem;
+  }
+  .usuarios-page .table-usuarios td:first-child::before {
+    display: none;
   }
 }
 </style>
