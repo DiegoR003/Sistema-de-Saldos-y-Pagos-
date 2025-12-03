@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../../App/bd.php';
 require_once __DIR__ . '/../../App/billing_rules.php';
+require_once __DIR__ . '/../../App/notificacion.php';
 
 function back(string $msg, bool $ok): never {
   $url = '/Sistema-de-Saldos-y-Pagos-/Public/index.php?m=cotizaciones';
@@ -28,11 +29,9 @@ try {
     $periodicidadGlobal = 'mensual';
   }
 
-  // Configuración de billing (UI)
   $overrides = json_decode($_POST['billing_json'] ?? '{}', true);
   if (!is_array($overrides)) $overrides = [];
 
-  // === RFC emisor (OBLIGATORIO) ===
   $rfcId = (int)($_POST['rfc_id'] ?? 0);
   if ($rfcId <= 0) back('Selecciona el RFC emisor antes de aprobar.', false);
 
@@ -47,7 +46,7 @@ try {
     throw new RuntimeException('RFC emisor inválido.');
   }
 
-  // 2) Cargar cotización y bloquearla
+  // 2) Cargar cotización
   $st = $pdo->prepare("SELECT * FROM cotizaciones WHERE id = ? FOR UPDATE");
   $st->execute([$id]);
   $cot = $st->fetch(PDO::FETCH_ASSOC);
@@ -59,7 +58,7 @@ try {
     throw new RuntimeException('La cotización ya no está pendiente (estado actual: '.$cot['estado'].')');
   }
 
-  // 3) Cliente por correo (crear si no existe)
+  // 3) Cliente
   $st = $pdo->prepare("SELECT id FROM clientes WHERE correo = ? LIMIT 1");
   $st->execute([$cot['correo']]);
   $clienteId = (int)$st->fetchColumn();
@@ -74,43 +73,34 @@ try {
     throw new RuntimeException('No se pudo obtener/crear el cliente.');
   }
 
-  // 4) Marcar cotización como aprobada y guardar cliente_id
-  $st = $pdo->prepare("
-    UPDATE cotizaciones
-    SET estado = 'aprobada', cliente_id = ?
-    WHERE id = ?
-  ");
+  // 4) Aprobar cotización
+  $st = $pdo->prepare("UPDATE cotizaciones SET estado = 'aprobada', cliente_id = ? WHERE id = ?");
   $st->execute([$clienteId, $id]);
 
- 
- // 4) orden
-// Ya NO calculamos próxima facturación aquí.
-// Solo, si quieres, un vence_en teórico o incluso NULL.
-$vence = null;
-
-$st = $pdo->prepare("
-  INSERT INTO ordenes
-    (cotizacion_id, cliente_id, rfc_id, total, saldo, estado, periodicidad, vence_en, proxima_facturacion)
-  VALUES
-    (:cid, :clid, :rfc, :tot, :sal, 'activa', :per, :vence, NULL)
-");
-$st->execute([
-  ':cid'   => $id,
-  ':clid'  => $clienteId,
-  ':rfc'   => $rfcId,
-  ':tot'   => (float)$cot['total'],
-  ':sal'   => (float)$cot['total'],
-  ':per'   => $periodicidadGlobal,
-  ':vence' => $vence
-]);
+  // 5) Crear orden
+  $vence = null;
+  $st = $pdo->prepare("
+    INSERT INTO ordenes
+      (cotizacion_id, cliente_id, rfc_id, total, saldo, estado, periodicidad, vence_en, proxima_facturacion)
+    VALUES
+      (:cid, :clid, :rfc, :tot, :sal, 'activa', :per, :vence, NULL)
+  ");
+  $st->execute([
+    ':cid'   => $id,
+    ':clid'  => $clienteId,
+    ':rfc'   => $rfcId,
+    ':tot'   => (float)$cot['total'],
+    ':sal'   => (float)$cot['total'],
+    ':per'   => $periodicidadGlobal,
+    ':vence' => $vence
+  ]);
 
   $ordenId = (int)$pdo->lastInsertId();
-
   if ($ordenId <= 0) {
     throw new RuntimeException('No se pudo crear la orden.');
   }
 
-  // 6) Items de la cotización -> orden_items
+  // 6) Items
   $it = $pdo->prepare("
     SELECT id, grupo, opcion, valor
     FROM cotizacion_items
@@ -131,10 +121,8 @@ $st->execute([
     $monto    = (float)($r['valor'] ?? 0);
     $concepto = trim(($r['grupo'] ?? '').' - '.($r['opcion'] ?? ''));
 
-    // regla base desde billing_rules.php
     [$bt, $iu, $ic, $nr] = infer_billing($r, $periodicidadGlobal);
 
-    // override desde UI
     if (isset($overrides[$grupo]) && is_array($overrides[$grupo])) {
       $ov    = $overrides[$grupo];
       $type  = ($ov['type']  ?? $bt) ?: $bt;
@@ -184,7 +172,6 @@ $st->execute([
       ':nr'       => $nr,
     ]);
 
-    // Ejemplo de mantenimiento web opcional
     if ($grupo === 'web' && !empty($overrides['web']['maint'])) {
       $mConcepto = 'Mantenimiento web anual';
       $mMonto    = 2999.00;
@@ -205,10 +192,55 @@ $st->execute([
     }
   }
 
+  // ✅ COMMIT PRIMERO - antes de notificaciones
   $pdo->commit();
+
+  // ==========================
+  // NOTIFICACIONES (DESPUÉS del commit exitoso)
+  // ==========================
+  try {
+    $clienteNombre  = $cot['empresa'] ?? 'Cliente';
+    $clienteCorreo  = $cot['correo']  ?? '';
+    $folio          = $cot['folio']   ?? ('COT-'.str_pad((string)$id, 5, '0', STR_PAD_LEFT));
+
+    $tituloAdminOp  = "Cotización $folio aprobada";
+    $cuerpoAdminOp  = "La cotización $folio del cliente {$clienteNombre} ha sido aprobada.";
+
+    // Notificar a admin y operador
+    notificar_roles(
+        $pdo,
+        ['admin','operador'],
+        $tituloAdminOp,
+        $cuerpoAdminOp,
+        'cotizacion',
+        $id
+    );
+
+    // Notificar al cliente
+    if (!empty($clienteId) && !empty($clienteCorreo)) {
+        $tituloCli = "Tu cotización $folio fue aprobada";
+        $cuerpoCli = "Hola {$clienteNombre}, tu cotización $folio ha sido aprobada y se ha creado tu orden de servicio.";
+
+        notificar_cliente(
+            $pdo,
+            (int)$clienteId,
+            $clienteCorreo,
+            $tituloCli,
+            $cuerpoCli,
+            'cotizacion',
+            $id
+        );
+    }
+  } catch (Throwable $e) {
+    // Si falla la notificación, solo loguea pero no interrumpas el flujo
+    error_log("Error al enviar notificaciones: " . $e->getMessage());
+  }
+
+  // Respuesta exitosa
   back('Cotización aprobada', true);
 
 } catch (Throwable $e) {
+  // Solo hace rollback si la transacción está activa
   if (isset($pdo) && $pdo->inTransaction()) {
     $pdo->rollBack();
   }

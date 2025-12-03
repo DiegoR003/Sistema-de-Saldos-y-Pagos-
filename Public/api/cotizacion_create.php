@@ -65,6 +65,8 @@ try {
   $cab->execute([$empresa,$correo,$subtotal,$adicionales,$impuestos,$total,$tasaIva,$minimo,$cumple?1:0]);
   $cotId = (int)$pdo->lastInsertId();
 
+  
+
   $det = $pdo->prepare("INSERT INTO cotizacion_items (cotizacion_id, grupo, opcion, valor)
                         VALUES (?,?,?,?)");
   foreach ($items as $it) {
@@ -72,6 +74,8 @@ try {
   }
 
   $pdo->commit();
+
+  
 
   /* 4) PRG si viene redirect */
   if ($redirect !== '') {

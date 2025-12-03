@@ -10,6 +10,7 @@ if (!defined('BASE_URL')) {
 
 // Obtener usuario actual
 require_once __DIR__ . '/../App/auth.php';
+
 $currentUser = current_user();
 $userName = $currentUser['nombre'] ?? 'Usuario';
 $userInitial = mb_substr($userName, 0, 1, 'UTF-8');
@@ -21,6 +22,65 @@ $notificaciones = [
   ['texto' => 'Recordatorio: Factura vence mañana', 'hace' => 'Hace 3 horas', 'leida' => true],
 ];
 $notifCount = count(array_filter($notificaciones, fn($n) => !$n['leida']));
+
+
+$usuarioId  = $_SESSION['usuario_id'] ?? 0;
+$usuarioRol = $_SESSION['usuario_rol'] ?? 'guest';
+
+// Config Pusher (ya la tienes en tu archivo de config)
+$pusherCfg = require __DIR__ . '/../App/pusher_config.php';
+
+$notifCount      = 0;
+$notificaciones  = [];
+
+// Función helper para "hace 3 min", "hace 2 horas", etc.
+function tiempo_hace_es(?string $fecha): string {
+    if (!$fecha) return '';
+    $dt = new DateTime($fecha);
+    $now = new DateTime();
+    $diff = $now->diff($dt);
+
+    if ($diff->y > 0) return 'hace '.$diff->y.' año(s)';
+    if ($diff->m > 0) return 'hace '.$diff->m.' mes(es)';
+    if ($diff->d > 0) return 'hace '.$diff->d.' día(s)';
+    if ($diff->h > 0) return 'hace '.$diff->h.' hora(s)';
+    if ($diff->i > 0) return 'hace '.$diff->i.' minuto(s)';
+    return 'hace unos segundos';
+}
+
+if ($usuarioId) {
+    // 1) cuántas pendientes (no leídas) tiene el usuario
+    $st = $pdo->prepare("
+        SELECT COUNT(*)
+        FROM notificaciones
+        WHERE canal = 'interno'
+          AND usuario_id = ?
+          AND leida_en IS NULL
+    ");
+    $st->execute([$usuarioId]);
+    $notifCount = (int)$st->fetchColumn();
+
+    // 2) últimas 10 notificaciones para el dropdown
+    $st = $pdo->prepare("
+        SELECT id, titulo, cuerpo, creado_en, leida_en
+        FROM notificaciones
+        WHERE canal = 'interno'
+          AND usuario_id = ?
+        ORDER BY creado_en DESC
+        LIMIT 10
+    ");
+    $st->execute([$usuarioId]);
+    $rows = $st->fetchAll(PDO::FETCH_ASSOC);
+
+    foreach ($rows as $r) {
+        $notificaciones[] = [
+            'id'    => (int)$r['id'],
+            'texto' => $r['titulo'] ?: $r['cuerpo'],
+            'hace'  => tiempo_hace_es($r['creado_en']),
+            'leida' => !empty($r['leida_en']),
+        ];
+    }
+}
 ?>
 <!doctype html>
 <html lang="es">
@@ -31,6 +91,18 @@ $notifCount = count(array_filter($notificaciones, fn($n) => !$n['leida']));
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
   <link href="./css/app.css?v=999" rel="stylesheet">
+
+  <script>
+  window.APP_USER = {
+    id: <?= (int)$userId ?>,
+    rol: <?= json_encode($userRole) ?>
+  };
+  window.PUSHER_CONFIG = {
+    key: <?= json_encode($pusherCfg['key']) ?>,
+    cluster: <?= json_encode($pusherCfg['cluster']) ?>
+  };
+</script>
+
 </head>
 
 <style>
@@ -205,6 +277,7 @@ $notifCount = count(array_filter($notificaciones, fn($n) => !$n['leida']));
     font-size: 0.65rem;
     min-width: 18px;
   }
+
 }
 
 /* Para pantallas muy pequeñas */
@@ -217,6 +290,11 @@ $notifCount = count(array_filter($notificaciones, fn($n) => !$n['leida']));
   .notif-item {
     padding: 0.5rem;
   }
+}
+
+.notif-item.unread {
+  background-color: #f5f5f5;
+  border-left: 3px solid #0d6efd;
 }
 </style>
 
@@ -235,7 +313,8 @@ $notifCount = count(array_filter($notificaciones, fn($n) => !$n['leida']));
       </a>
 
       <div class="ms-auto d-flex align-items-center gap-2">
-        <!-- Campanita notificaciones -->
+      
+    <!-- Campanita notificaciones -->
 <div class="dropdown">
   <button class="notif-bell" 
           type="button" 
@@ -245,10 +324,15 @@ $notifCount = count(array_filter($notificaciones, fn($n) => !$n['leida']));
           aria-expanded="false">
     <i class="bi bi-bell"></i>
     <?php if ($notifCount > 0): ?>
-      <span class="notif-badge"><?= $notifCount ?></span>
+      <span class="notif-badge" id="notifCountBadge"><?= $notifCount ?></span>
+    <?php else: ?>
+      <span class="notif-badge d-none" id="notifCountBadge">0</span>
     <?php endif; ?>
   </button>
-  <ul class="dropdown-menu dropdown-menu-end notif-menu" aria-labelledby="dropdownNotificaciones">
+
+  <ul class="dropdown-menu dropdown-menu-end notif-menu" 
+      aria-labelledby="dropdownNotificaciones"
+      id="notifList">
     <li class="px-3 py-2 border-bottom bg-light">
       <div class="d-flex justify-content-between align-items-center">
         <span class="fw-semibold small">Notificaciones</span>
@@ -257,8 +341,9 @@ $notifCount = count(array_filter($notificaciones, fn($n) => !$n['leida']));
         <?php endif; ?>
       </div>
     </li>
+
     <?php if (empty($notificaciones)): ?>
-      <li class="text-center py-4 text-muted small">
+      <li class="text-center py-4 text-muted small" id="notifEmpty">
         <i class="bi bi-bell-slash d-block mb-2" style="font-size: 2rem; opacity: 0.3;"></i>
         No hay notificaciones
       </li>
@@ -274,14 +359,14 @@ $notifCount = count(array_filter($notificaciones, fn($n) => !$n['leida']));
         </li>
       <?php endforeach; ?>
     <?php endif; ?>
-    <li class="text-center py-2 border-top bg-light">
+
+    <li class="text-center py-2 border-top bg-light notif-footer">
       <a href="#" class="small text-decoration-none text-primary fw-semibold">
         Ver todas <i class="bi bi-arrow-right"></i>
       </a>
     </li>
   </ul>
 </div>
-
         <!-- Usuario -->
         <div class="dropdown">
           <button class="btn rounded-pill user-pill dropdown-toggle d-flex align-items-center gap-2"
