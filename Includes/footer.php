@@ -29,3 +29,46 @@
     });
   })();
 </script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  const bell = document.getElementById('dropdownNotificaciones');
+  if (!bell) return;
+
+  let notifMarked = false; // para no spamear el endpoint cada vez que abras
+
+  bell.addEventListener('show.bs.dropdown', function () {
+    if (notifMarked) return;
+
+    fetch('/Sistema-de-Saldos-y-Pagos-/Public/api/notificaciones_leer.php', {
+      method: 'POST',
+      headers: {
+        'X-Requested-With': 'XMLHttpRequest'
+      }
+    })
+    .then(r => r.json())
+    .then(data => {
+      if (!data.ok) {
+        console.error('Error marcando notificaciones:', data.error);
+        return;
+      }
+
+      // Quitar burbujas / badges de contador
+      const badgeMain = document.querySelector('.notif-badge');
+      if (badgeMain) badgeMain.remove();
+
+      const headerPill = document.querySelector('.notif-menu .badge.bg-danger');
+      if (headerPill) headerPill.remove();
+
+      // Quitar estilo de "no leída" a los items
+      document.querySelectorAll('.notif-item.unread').forEach(function(li) {
+        li.classList.remove('unread');
+      });
+
+      notifMarked = true;
+    })
+    .catch(err => {
+      console.error('Error AJAX notificaciones_leer:', err);
+    });
+  });
+});
+</script>

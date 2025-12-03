@@ -1,6 +1,7 @@
 <?php
 // Public/api/cotizacion_create.php
 require_once __DIR__ . '/../../App/bd.php';
+require_once __DIR__.'/../../App/notifications.php';
 
 function pick($k,$d=''){
   return isset($_POST[$k]) ? (is_array($_POST[$k])?$_POST[$k]:trim((string)$_POST[$k])) : $d;
@@ -65,6 +66,8 @@ try {
   $cab->execute([$empresa,$correo,$subtotal,$adicionales,$impuestos,$total,$tasaIva,$minimo,$cumple?1:0]);
   $cotId = (int)$pdo->lastInsertId();
 
+  
+
   $det = $pdo->prepare("INSERT INTO cotizacion_items (cotizacion_id, grupo, opcion, valor)
                         VALUES (?,?,?,?)");
   foreach ($items as $it) {
@@ -72,6 +75,8 @@ try {
   }
 
   $pdo->commit();
+
+  
 
   /* 4) PRG si viene redirect */
   if ($redirect !== '') {
