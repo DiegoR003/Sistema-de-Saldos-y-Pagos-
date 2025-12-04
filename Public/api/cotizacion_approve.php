@@ -3,7 +3,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../../App/bd.php';
 require_once __DIR__ . '/../../App/billing_rules.php';
-require_once __DIR__ . '/App/notifications.php';
+require_once __DIR__ . '/../../App/notifications.php';
 
 function back(string $msg, bool $ok): never {
   $url = '/Sistema-de-Saldos-y-Pagos-/Public/index.php?m=cotizaciones';
@@ -195,15 +195,24 @@ try {
   // ✅ COMMIT antes de notificaciones
   $pdo->commit();
 
-  // ✅ Notificaciones DESPUÉS del commit
-  try {
-    notificar_cotizacion_estado($pdo, $id, 'aprobada');
-  } catch (Throwable $e) {
-    error_log('Error notificando cotización aprobada: '.$e->getMessage());
-  }
+  // --- Datos mínimos de la cotización para la notificación ---
+$cotizacionData = [
+    'id'             => $cot['id'],         // o el nombre de tu columna
+    'folio'          => $cot['folio'],      // ej: COT-00011
+    'cliente_nombre' => $cot['cliente'],    // ej: nombre del cliente
+    'cliente_id'     => $cot['cliente_id'],
+    'correo'         => $cot['correo'],     // si lo tienes en el SELECT
+];
 
-  // ✅ Redirección correcta
-  back('Cotización aprobada', true);
+// ID del usuario logueado (si lo tienes en $_SESSION)
+$usuarioIdActual = $_SESSION['user']['id'] ?? null;
+
+try {
+    notificar_cotizacion_aprobada($pdo, $cotizacionData, $usuarioIdActual);
+} catch (Throwable $e) {
+    // Para depurar si algo falla:
+    // error_log('Error al enviar notificación: ' . $e->getMessage());
+}
 
 } catch (Throwable $e) {
   if (isset($pdo) && $pdo->inTransaction()) {

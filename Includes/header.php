@@ -31,30 +31,54 @@ $usuarioRol = $_SESSION['usuario_rol'] ?? 'guest';
 // Config Pusher (ya la tienes en tu archivo de config)
 $pusherCfg = require __DIR__ . '/../App/pusher_config.php';
 
-// antes de la vista, cuando ya tienes $pdo y $userId
-$notifCount = 0;
+$notifCount     = 0;
 $notificaciones = [];
 
 if ($usuarioId) {
-    $sqlNotif = "
-      SELECT id, titulo, cuerpo, leida_en, creado_en
-      FROM notificaciones
-      WHERE tipo = 'interna'
-        AND canal = 'sistema'
-        AND (usuario_id IS NULL OR usuario_id = :uid)
-      ORDER BY creado_en DESC
-      LIMIT 10
+    // Base común de filtros
+    $baseSql = "
+        FROM notificaciones
+        WHERE canal = 'interna'
+          AND (usuario_id = :uid OR usuario_id IS NULL)
+          AND estado IN ('pendiente','enviada')
     ";
-    $stNotif = $pdo->prepare($sqlNotif);
-    $stNotif->execute([':uid' => $usuarioId]);
-    $notificaciones = $stNotif->fetchAll(PDO::FETCH_ASSOC);
 
-    $notifCount = 0;
-    foreach ($notificaciones as $n) {
-        if (empty($n['leida_en'])) {
-            $notifCount++;
+    // Contador
+    $st = $pdo->prepare("SELECT COUNT(*) ".$baseSql);
+    $st->execute([':uid' => $usuarioId]);
+    $notifCount = (int)$st->fetchColumn();
+
+    // Listado
+    $st = $pdo->prepare("
+        SELECT id, titulo, cuerpo, estado, creado_en
+        ".$baseSql."
+        ORDER BY creado_en DESC
+        LIMIT 10
+    ");
+    $st->execute([':uid' => $usuarioId]);
+    $notificaciones = $st->fetchAll(PDO::FETCH_ASSOC);
+
+    // Formatear “hace X” si ya tenías esa lógica
+    foreach ($notificaciones as &$n) {
+        $ts = strtotime($n['creado_en'] ?? '');
+        if ($ts) {
+            $diff = time() - $ts;
+            if ($diff < 60) {
+                $n['hace'] = 'hace unos segundos';
+            } elseif ($diff < 3600) {
+                $min = floor($diff / 60);
+                $n['hace'] = "hace {$min} min";
+            } elseif ($diff < 86400) {
+                $h = floor($diff / 3600);
+                $n['hace'] = "hace {$h} h";
+            } else {
+                $n['hace'] = date('d/m/Y H:i', $ts);
+            }
+        } else {
+            $n['hace'] = '';
         }
     }
+    unset($n);
 }
 
 
