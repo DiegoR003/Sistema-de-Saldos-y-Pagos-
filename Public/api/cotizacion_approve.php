@@ -196,12 +196,21 @@ try {
   $pdo->commit();
 
   // --- Datos mínimos de la cotización para la notificación ---
+// --- Datos mínimos de la cotización para la notificación ---
 $cotizacionData = [
-    'id'             => $cot['id'],         // o el nombre de tu columna
-    'folio'          => $cot['folio'],      // ej: COT-00011
-    'cliente_nombre' => $cot['cliente'],    // ej: nombre del cliente
-    'cliente_id'     => $cot['cliente_id'],
-    'correo'         => $cot['correo'],     // si lo tienes en el SELECT
+    'id'             => $cot['id'],
+    
+    // CORRECCIÓN 1: Si no tienes columna 'folio', usa el ID o genera uno basado en el ID
+    'folio'          => $cot['folio'] ?? ('COT-' . str_pad((string)$cot['id'], 5, '0', STR_PAD_LEFT)), 
+    
+    // CORRECCIÓN 2: Usar 'empresa' en lugar de 'cliente' (según tu código anterior)
+    'cliente_nombre' => $cot['empresa'] ?? $cot['cliente_nombre'] ?? 'Cliente Desconocido',
+    
+    // CORRECCIÓN 3: Usamos la variable $clienteId que ya obtuviste/creaste arriba
+    // Esto es más seguro que leer $cot['cliente_id'] porque esa podría ser NULL antes de la aprobación
+    'cliente_id'     => $clienteId, 
+    
+    'correo'         => $cot['correo'] ?? '',
 ];
 
 // ID del usuario logueado (si lo tienes en $_SESSION)

@@ -76,7 +76,17 @@ try {
 
   $pdo->commit();
 
-  
+  // --- NOTIFICAR ADMINS Y OPERADORES ---
+try {
+    $datosNotif = [
+        'id'      => $cotId,
+        'empresa' => $empresa,
+        'total'   => $total
+    ];
+    notificar_nueva_cotizacion($pdo, $datosNotif);
+} catch (Throwable $e) {
+    // Silencioso: si falla la notificación, no interrumpir el registro
+}
 
   /* 4) PRG si viene redirect */
   if ($redirect !== '') {

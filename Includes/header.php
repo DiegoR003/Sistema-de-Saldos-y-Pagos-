@@ -8,79 +8,89 @@ if (!defined('BASE_URL')) {
   }
 }
 
+// ✅ 1. AGREGA LA CONEXIÓN A LA BASE DE DATOS AQUÍ
+require_once __DIR__ . '/../App/bd.php'; 
+
 // Obtener usuario actual
 require_once __DIR__ . '/../App/auth.php';
+require_once __DIR__ . '/../App/notifications.php';
 
+// ✅ Agrega esta línea si no la tienes, para asegurar que cargue la config
+require_once __DIR__ . '/../App/pusher_config.php';
+
+// ✅ 2. INICIALIZA LA VARIABLE $pdo
+$pdo = db();
+
+// 1. Recuperamos los datos del usuario logueado
 $currentUser = current_user();
+
+// 2. OBTENER ID (Lógica blindada)
+// Si current_user tiene ID, lo usamos (esto arreglará tu problema)
+if (!empty($currentUser['id'])) {
+    $usuarioId = (int)$currentUser['id'];
+} 
+// Si no, intentamos buscar en la sesión directamente
+elseif (!empty($_SESSION['usuario_id'])) {
+    $usuarioId = (int)$_SESSION['usuario_id'];
+} 
+else {
+    $usuarioId = 0;
+}
+
+// 3. Obtener Rol (intentamos del array, si no, de sesión, si no, guest)
+$usuarioRol = $currentUser['rol'] ?? $_SESSION['usuario_rol'] ?? 'guest';
+
+// 4. Datos visuales
 $userName = $currentUser['nombre'] ?? 'Usuario';
 $userInitial = mb_substr($userName, 0, 1, 'UTF-8');
 
-// Notificaciones (simuladas por ahora - luego conectas con BD)
-$notificaciones = [
-  ['texto' => 'Nuevo pago recibido de Dolcevilla', 'hace' => 'Hace 5 min', 'leida' => false],
-  ['texto' => 'Cotización pendiente de aprobar', 'hace' => 'Hace 1 hora', 'leida' => false],
-  ['texto' => 'Recordatorio: Factura vence mañana', 'hace' => 'Hace 3 horas', 'leida' => true],
-];
-$notifCount = count(array_filter($notificaciones, fn($n) => !$n['leida']));
+// -------------------------------------------------------------------
+//  Cargar notificaciones para el header
+// -------------------------------------------------------------------
+$notifCount      = 0;
+$notificaciones  = [];
 
-
-
-$usuarioId  = $_SESSION['usuario_id'] ?? 0;
-$usuarioRol = $_SESSION['usuario_rol'] ?? 'guest';
-
-// Config Pusher (ya la tienes en tu archivo de config)
-$pusherCfg = require __DIR__ . '/../App/pusher_config.php';
-
-$notifCount     = 0;
-$notificaciones = [];
-
-if ($usuarioId) {
-    // Base común de filtros
-    $baseSql = "
+if ($usuarioId !== null) {
+    $sql = "
+        SELECT id, titulo, cuerpo, estado, leida_en, creado_en
         FROM notificaciones
-        WHERE canal = 'interna'
-          AND (usuario_id = :uid OR usuario_id IS NULL)
-          AND estado IN ('pendiente','enviada')
-    ";
-
-    // Contador
-    $st = $pdo->prepare("SELECT COUNT(*) ".$baseSql);
-    $st->execute([':uid' => $usuarioId]);
-    $notifCount = (int)$st->fetchColumn();
-
-    // Listado
-    $st = $pdo->prepare("
-        SELECT id, titulo, cuerpo, estado, creado_en
-        ".$baseSql."
+        WHERE (usuario_id = :uid OR usuario_id IS NULL)
+          AND estado = 'pendiente'
         ORDER BY creado_en DESC
         LIMIT 10
-    ");
-    $st->execute([':uid' => $usuarioId]);
-    $notificaciones = $st->fetchAll(PDO::FETCH_ASSOC);
+    ";
 
-    // Formatear “hace X” si ya tenías esa lógica
-    foreach ($notificaciones as &$n) {
-        $ts = strtotime($n['creado_en'] ?? '');
-        if ($ts) {
-            $diff = time() - $ts;
-            if ($diff < 60) {
-                $n['hace'] = 'hace unos segundos';
-            } elseif ($diff < 3600) {
-                $min = floor($diff / 60);
-                $n['hace'] = "hace {$min} min";
-            } elseif ($diff < 86400) {
-                $h = floor($diff / 3600);
-                $n['hace'] = "hace {$h} h";
-            } else {
-                $n['hace'] = date('d/m/Y H:i', $ts);
-            }
-        } else {
-            $n['hace'] = '';
+    $st = $pdo->prepare($sql);
+    $st->execute([':uid' => $usuarioId]);
+    $rows = $st->fetchAll(PDO::FETCH_ASSOC);
+
+    $ahora = new DateTimeImmutable('now');
+
+    foreach ($rows as $r) {
+        $creado = !empty($r['creado_en'])
+            ? new DateTimeImmutable($r['creado_en'])
+            : $ahora;
+
+        $diff = $ahora->diff($creado);
+
+        if     ($diff->d > 0) $hace = $diff->d . ' día(s)';
+        elseif ($diff->h > 0) $hace = $diff->h . ' h';
+        elseif ($diff->i > 0) $hace = $diff->i . ' min';
+        else                  $hace = 'hace un momento';
+
+        $notificaciones[] = [
+            'id'    => (int)$r['id'],
+            'texto' => $r['titulo'] . ' · ' .
+                       mb_strimwidth($r['cuerpo'] ?? '', 0, 90, '…', 'UTF-8'),
+            'hace'  => $hace,
+            'leida' => !empty($r['leida_en']),
+        ];
+
+        if (empty($r['leida_en'])) {
+            $notifCount++;
         }
     }
-    unset($n);
 }
-
 
 
 // Función helper para "hace 3 min", "hace 2 horas", etc.
@@ -145,16 +155,19 @@ if ($usuarioId) {
   <link href="./css/app.css?v=999" rel="stylesheet">
 
   <script>
+  /* Pasamos las variables de PHP a JS de forma segura */
   window.APP_USER = {
-    id: <?= (int)$userId ?>,
-    rol: <?= json_encode($userRole) ?>
+    /* Usamos 0 si no hay ID, evitando errores de sintaxis */
+    id: <?php echo (int)($usuarioId ?? 0); ?>,
+    rol: "<?php echo htmlspecialchars($usuarioRol ?? 'guest'); ?>"
   };
+
+  /* Configuración de Pusher */
   window.PUSHER_CONFIG = {
-    key: <?= json_encode($pusherCfg['key']) ?>,
-    cluster: <?= json_encode($pusherCfg['cluster']) ?>
+    key: "<?php echo defined('PUSHER_APP_KEY') ? PUSHER_APP_KEY : ''; ?>",
+    cluster: "<?php echo defined('PUSHER_APP_CLUSTER') ? PUSHER_APP_CLUSTER : ''; ?>"
   };
 </script>
-
 </head>
 
 <style>
@@ -366,25 +379,30 @@ if ($usuarioId) {
 
       <div class="ms-auto d-flex align-items-center gap-2">
       
-    <!-- Campanita notificaciones -->
-<div class="dropdown">
-  <button class="notif-bell" 
-          type="button" 
-          id="dropdownNotificaciones"
-          data-bs-toggle="dropdown" 
-          data-bs-auto-close="outside"
-          aria-expanded="false">
-    <i class="bi bi-bell"></i>
+    <!-- Campanita de notificaciones -->
+<li class="nav-item dropdown me-3">
+  <button
+      class="btn btn-link position-relative p-0 border-0"
+      type="button"
+      id="dropdownNotificaciones"
+      data-bs-toggle="dropdown"
+      data-bs-auto-close="outside"
+      aria-expanded="false">
+    <i class="bi bi-bell fs-5"></i>
+
     <?php if ($notifCount > 0): ?>
-      <span class="notif-badge" id="notifCountBadge"><?= $notifCount ?></span>
-    <?php else: ?>
-      <span class="notif-badge d-none" id="notifCountBadge">0</span>
+      <span
+        id="notifCountBadge"
+        class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
+        <?= $notifCount ?>
+      </span>
     <?php endif; ?>
   </button>
 
-  <ul class="dropdown-menu dropdown-menu-end notif-menu" 
-      aria-labelledby="dropdownNotificaciones"
-      id="notifList">
+  <ul class="dropdown-menu dropdown-menu-end shadow notif-menu"
+      aria-labelledby="dropdownNotificaciones">
+
+    <!-- Cabecera del dropdown -->
     <li class="px-3 py-2 border-bottom bg-light">
       <div class="d-flex justify-content-between align-items-center">
         <span class="fw-semibold small">Notificaciones</span>
@@ -394,31 +412,39 @@ if ($usuarioId) {
       </div>
     </li>
 
+    <!-- Lista de notificaciones -->
     <?php if (empty($notificaciones)): ?>
-      <li class="text-center py-4 text-muted small" id="notifEmpty">
-        <i class="bi bi-bell-slash d-block mb-2" style="font-size: 2rem; opacity: 0.3;"></i>
+      <li class="text-center py-4 text-muted small">
+        <i class="bi bi-bell-slash d-block mb-2"
+           style="font-size: 2rem; opacity: 0.3;"></i>
         No hay notificaciones
       </li>
     <?php else: ?>
       <?php foreach ($notificaciones as $n): ?>
-        <li class="notif-item <?= !$n['leida'] ? 'unread' : '' ?>">
-          <div class="small fw-semibold mb-1" style="line-height: 1.3;">
-            <?= htmlspecialchars($n['texto']) ?>
+        <li class="px-3 py-2 border-bottom small <?= $n['leida'] ? '' : 'bg-light' ?>">
+          <div class="fw-semibold mb-1" style="line-height: 1.3;">
+            <?= htmlspecialchars($n['texto'], ENT_QUOTES, 'UTF-8') ?>
           </div>
           <div class="text-muted" style="font-size: 0.75rem;">
-            <i class="bi bi-clock me-1"></i><?= htmlspecialchars($n['hace']) ?>
+            <i class="bi bi-clock me-1"></i>
+            <?= htmlspecialchars($n['hace'], ENT_QUOTES, 'UTF-8') ?>
           </div>
         </li>
       <?php endforeach; ?>
     <?php endif; ?>
 
-    <li class="text-center py-2 border-top bg-light notif-footer">
-      <a href="#" class="small text-decoration-none text-primary fw-semibold">
+    <!-- Footer del dropdown -->
+    <li class="text-center py-2 border-top bg-light">
+      <a href="#"
+         class="small text-decoration-none text-primary fw-semibold">
         Ver todas <i class="bi bi-arrow-right"></i>
       </a>
     </li>
   </ul>
-</div>
+</li>
+
+
+
         <!-- Usuario -->
         <div class="dropdown">
           <button class="btn rounded-pill user-pill dropdown-toggle d-flex align-items-center gap-2"

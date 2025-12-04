@@ -5,6 +5,11 @@
       crossorigin="anonymous"></script>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+
+<script src="https://js.pusher.com/8.2/pusher.min.js"></script>
+
+<script src="/Sistema-de-Saldos-y-Pagos-/Public/js/notificaciones.js"></script>
 <script>
   // Parche mínimo: SOLO para los links dentro del offcanvas (móvil).
   // Forzamos la navegación y cerramos el offcanvas de forma controlada.
