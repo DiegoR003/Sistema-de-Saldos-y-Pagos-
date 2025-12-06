@@ -65,3 +65,52 @@
 
 /* Tarjetas (si las usas) */
 .card{ border:0; border-radius:12px; box-shadow:0 8px 18px rgba(0,0,0,.05); }
+
+/* --- Estilos para Scroll Interno --- */
+
+/* Contenedor con scroll vertical limitado */
+.scroll-container {
+    max-height: 60vh; /* Ajusta la altura: 60% del alto de la pantalla */
+    overflow-y: auto; /* Activa el scroll vertical automático */
+    overflow-x: hidden; /* Oculta scroll horizontal innecesario */
+    border-radius: 0.5rem;
+    border: 1px solid rgba(0,0,0,0.05);
+}
+
+/* Para que la cabecera de la tabla se quede FIJA al bajar (Sticky Header) */
+.scroll-container table thead th {
+    position: sticky;
+    top: 0;
+    background-color: #f8f9fa; /* Color de fondo gris claro (bootstrap light) */
+    z-index: 2; /* Para que pase por encima de las filas */
+    box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+}
+
+/* Ajuste específico para móviles (Cards) */
+@media (max-width: 768px) {
+    .scroll-container {
+        max-height: 70vh; /* Un poco más alto en móvil */
+        padding: 0.5rem;
+        background-color: #f8f9fa; /* Fondo gris para diferenciar */
+    }
+}
+
+/* --- 2. Arreglo de Botones de Paginación (Color Banana) --- */
+  .pagination .page-link {
+      color: #333; /* Texto oscuro */
+      border: 1px solid #dee2e6;
+  }
+  .pagination .page-link:hover {
+      background-color: #fff8e1; /* Fondo amarillo claro al pasar mouse */
+      color: #000;
+  }
+  .pagination .page-item.active .page-link {
+      background-color: #fdd835 !important; /* Amarillo fuerte activo */
+      border-color: #fdd835 !important;
+      color: #000 !important;
+      font-weight: bold;
+  }
+  .pagination .page-item.disabled .page-link {
+      background-color: #e9ecef;
+      color: #6c757d;
+  }

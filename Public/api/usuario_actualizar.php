@@ -3,46 +3,58 @@
 declare(strict_types=1);
 require_once __DIR__ . '/../../App/bd.php';
 
-if ($_SERVER['REQUEST_METHOD'] !== 'POST') { exit; }
+// Cargar auth para obtener el ID de forma segura
+$authFile = __DIR__ . '/../../App/auth.php';
+if (file_exists($authFile)) require_once $authFile;
+
+if (session_status() === PHP_SESSION_NONE) session_start();
+
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') { exit('Método no permitido'); }
 
 $id     = (int)($_POST['id'] ?? 0);
 $nombre = trim($_POST['nombre'] ?? '');
 $correo = trim($_POST['correo'] ?? '');
 
-$back = '/Sistema-de-Saldos-y-Pagos-/Public/index.php?m=usuarios'; 
+$back = '/Sistema-de-Saldos-y-Pagos-/Public/index.php?m=usuarios';
 
 if ($id <= 0 || $nombre === '' || $correo === '') {
-    header("Location: $back&err=Datos+invalidos");
+    header("Location: $back&err=Faltan+datos");
     exit;
 }
 
 try {
     $pdo = db();
     
-    // Validar que el correo no lo use OTRA persona (id diferente al mío)
+    // Verificar correo duplicado
     $st = $pdo->prepare("SELECT id FROM usuarios WHERE correo = ? AND id <> ?");
     $st->execute([$correo, $id]);
     if ($st->fetch()) {
-        throw new Exception("El correo ya está en uso por otro usuario.");
+        throw new Exception("El correo ya está en uso.");
     }
 
-    // Actualizar
+    // Actualizar BD
     $upd = $pdo->prepare("UPDATE usuarios SET nombre = ?, correo = ? WHERE id = ?");
     $upd->execute([$nombre, $correo, $id]);
 
-    // Actualizar la sesión en vivo si el usuario se editó a sí mismo
-    if (session_status() === PHP_SESSION_NONE) session_start();
-    // Verificamos usando el ID de sesión que corregimos antes
-    $sesId = $_SESSION['usuario_id'] ?? $_SESSION['user']['id'] ?? 0;
-    
-    if ($sesId == $id) {
-        // Actualizamos para que el cambio se vea reflejado en el header inmediatamente
-        if (isset($_SESSION['user'])) {
+    // --- ACTUALIZAR SESIÓN EN VIVO ---
+    // Determinamos quién es el usuario logueado actualmente
+    $miId = 0;
+    if (function_exists('current_user')) {
+        $u = current_user();
+        $miId = (int)($u['id'] ?? 0);
+    }
+    // Fallback sesión
+    if ($miId === 0) $miId = (int)($_SESSION['usuario_id'] ?? $_SESSION['user']['id'] ?? 0);
+
+    // Si me estoy editando a mí mismo, actualizo la sesión
+    if ($miId === $id) {
+        if (isset($_SESSION['user']) && is_array($_SESSION['user'])) {
             $_SESSION['user']['nombre'] = $nombre;
             $_SESSION['user']['correo'] = $correo;
         }
-        // Si usas variables sueltas también
+        // Actualizar variables sueltas si las usas en auth.php
         if (isset($_SESSION['usuario_nombre'])) $_SESSION['usuario_nombre'] = $nombre;
+        if (isset($_SESSION['nombre'])) $_SESSION['nombre'] = $nombre;
     }
 
     header("Location: $back&ok=Datos+actualizados");

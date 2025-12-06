@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../App/bd.php';
+require_once __DIR__ . '/../Includes/footer.php'; 
 
 // Usa la utilidad si existe; si no, define un fallback seguro
 if (file_exists(__DIR__ . '/../App/date_utils.php')) {
@@ -575,12 +576,25 @@ $vistaRapidaTxt = $vistaRapida ? implode(' · ', $vistaRapida) : '—';
                       <?php endif; ?>
                     </td>
 
+                    <?php 
+        $isPausado = ((int)$sv['pausado'] === 1);
+        
+        // Si está pausado, la acción es Reanudar (Verde)
+        // Si está activo, la acción es Pausar (Amarillo)
+        $txtAccion = $isPausado ? 'Reanudar' : 'Pausar';
+        $colorBtn  = $isPausado ? '#198754' : '#ffc107'; 
+        $titulo    = $isPausado ? "¿Reanudar servicio?" : "¿Pausar servicio?";
+        $texto     = $isPausado ? "El servicio volverá a generar cargos automáticos." : "El cobro se detendrá temporalmente.";
+        $btnClass  = $isPausado ? 'btn-outline-success' : 'btn-outline-warning';
+        $iconClass = $isPausado ? 'bi-play-fill' : 'bi-pause-fill';
+      ?>
+
                     <td class="text-end">
                       <?php if (empty($sv['end_at'])): ?>
                         <div class="actions-inline">
                           <form method="post"
                                 action="/Sistema-de-Saldos-y-Pagos-/Public/api/orden_item_pause.php"
-                                onsubmit="return confirm('¿Seguro que quieres <?= ((int)$sv['pausado']===1?'reanudar':'pausar') ?> este servicio?');">
+                                onsubmit="confirmarAccion(event, '<?= $titulo ?>', '<?= $texto ?>', 'Sí, <?= strtolower($txtAccion) ?>', '<?= $colorBtn ?>')">
                             <input type="hidden" name="orden_id" value="<?= (int)$ordenId ?>">
                             <input type="hidden" name="item_id"  value="<?= (int)$sv['id'] ?>">
                             <button class="btn btn-sm btn-outline-warning me-1">
@@ -588,13 +602,13 @@ $vistaRapidaTxt = $vistaRapida ? implode(' · ', $vistaRapida) : '—';
                             </button>
                           </form>
 
-                          <form method="post"
-                                action="/Sistema-de-Saldos-y-Pagos-/Public/api/orden_item_cancel.php"
-                                onsubmit="return confirm('Esta acción da de baja definitiva el servicio. ¿Continuar?');">
-                            <input type="hidden" name="orden_id" value="<?= (int)$ordenId ?>">
-                            <input type="hidden" name="item_id"  value="<?= (int)$sv['id'] ?>">
-                            <button class="btn btn-sm btn-outline-danger">Cancelar</button>
-                          </form>
+                         <form method="post"
+      action="/Sistema-de-Saldos-y-Pagos-/Public/api/orden_item_cancel.php"
+      onsubmit="confirmarAccion(event, '¿Cancelar servicio?', 'Esta acción da de baja definitiva y NO se puede deshacer.', 'Sí, cancelar', '#dc3545')">
+  <input type="hidden" name="orden_id" value="<?= (int)$ordenId ?>">
+  <input type="hidden" name="item_id"  value="<?= (int)$sv['id'] ?>">
+  <button class="btn btn-sm btn-outline-danger" title="Cancelar servicio">Cancelar</button>
+</form>
                         </div>
                       <?php else: ?>
                         <span class="text-muted small">Sin acciones</span>
@@ -627,7 +641,7 @@ $vistaRapidaTxt = $vistaRapida ? implode(' · ', $vistaRapida) : '—';
 
             <!-- Cobrar -->
             <form method="post" action="/Sistema-de-Saldos-y-Pagos-/Public/api/pagos_registrar.php"
-                  id="formCobro" onsubmit="return confirm('¿Confirmar cobro del periodo seleccionado?');">
+                  id="formCobro" onsubmit="confirmarAccion(event, '¿Registrar Cobro?', 'Se registrará el pago para el periodo seleccionado.', 'Sí, cobrar', '#0d6efd')">
               <input type="hidden" name="orden_id" value="<?= (int)$orden['id'] ?>">
               <input type="hidden" name="cargo_id" id="cargoId" value="">
               <input type="hidden" name="periodo_inicio" id="periodoInicio" value="">
@@ -689,7 +703,7 @@ $vistaRapidaTxt = $vistaRapida ? implode(' · ', $vistaRapida) : '—';
 
             <!-- Emitir / Notificar -->
             <form method="post" action="/Sistema-de-Saldos-y-Pagos-/Public/api/cargos_emitir.php"
-                  onsubmit="return confirm('¿Emitir/actualizar el cargo y notificar al cliente?');">
+                  onsubmit="confirmarAccion(event, '¿Emitir cargo del mes?', 'Se generará el cargo y se notificará al cliente por correo.', 'Sí, emitir', '#fdd835')">
               <input type="hidden" name="orden_id" value="<?= (int)$orden['id'] ?>">
               <input type="hidden" name="periodo_inicio" id="emitIni" value="<?= htmlspecialchars($iniMes) ?>">
               <input type="hidden" name="periodo_fin" id="emitFin" value="<?= htmlspecialchars($finMes) ?>">
@@ -836,3 +850,4 @@ $vistaRapidaTxt = $vistaRapida ? implode(' · ', $vistaRapida) : '—';
   }
 })();
 </script>
+

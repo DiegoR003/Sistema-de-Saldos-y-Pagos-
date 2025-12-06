@@ -1,50 +1,54 @@
 <?php
 // Public/api/usuario_eliminar.php
 declare(strict_types=1);
+
+// 1. Cargar dependencias vitales
 require_once __DIR__ . '/../../App/bd.php';
+require_once __DIR__ . '/../../App/auth.php'; // ¡Importante para reconocer al usuario!
 
 if (session_status() === PHP_SESSION_NONE) session_start();
 
-// 1. Validar permisos de Admin
-$rol = $_SESSION['usuario_rol'] ?? $_SESSION['user']['rol'] ?? 'guest';
+// 2. VALIDACIÓN DE ROL ROBUSTA
+// Buscamos el rol donde sea que esté y lo convertimos a minúsculas
+$u = function_exists('current_user') ? current_user() : [];
+$rolRaw = $u['rol'] ?? $_SESSION['usuario_rol'] ?? $_SESSION['user']['rol'] ?? 'guest';
+$rol = strtolower(trim((string)$rolRaw));
+
+// Solo pasa si es 'admin'
 if ($rol !== 'admin') {
-    die("Acceso denegado");
+    // Para depurar, mostramos qué rol detectó (puedes quitar esto luego)
+    die("Acceso denegado. El sistema detectó tu rol como: '" . htmlspecialchars($rolRaw) . "'");
 }
 
-if ($_SERVER['REQUEST_METHOD'] !== 'POST') { exit; }
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    die('Método no permitido');
+}
 
 $id = (int)($_POST['id'] ?? 0);
-$miId = (int)($_SESSION['usuario_id'] ?? $_SESSION['user']['id'] ?? 0);
-
+$miId = (int)($u['id'] ?? $_SESSION['usuario_id'] ?? 0);
 $back = '/Sistema-de-Saldos-y-Pagos-/Public/index.php?m=usuarios';
 
-// 2. Validaciones de seguridad
 if ($id <= 0) {
     header("Location: $back&err=ID+inválido");
     exit;
 }
 
 if ($id === $miId) {
-    header("Location: $back&err=No+puedes+eliminar+tu+propia+cuenta+mientras+la+usas");
+    header("Location: $back&err=No+puedes+eliminarte+a+ti+mismo");
     exit;
 }
 
 try {
     $pdo = db();
-    
-    // (Opcional) Aquí podrías verificar si el usuario tiene ventas/cotizaciones 
-    // y decidir si prohibir el borrado o solo marcarlo como inactivo.
-    // Por ahora, haremos un borrado físico.
-
-    // Borramos relación de rol primero
+    // Borrar relación rol
     $st = $pdo->prepare("DELETE FROM usuario_rol WHERE usuario_id = ?");
     $st->execute([$id]);
 
-    // Borramos usuario
+    // Borrar usuario
     $st = $pdo->prepare("DELETE FROM usuarios WHERE id = ?");
     $st->execute([$id]);
 
-    header("Location: $back&ok=Usuario+eliminado+correctamente");
+    header("Location: $back&ok=Usuario+eliminado");
 
 } catch (Exception $e) {
     header("Location: $back&err=" . rawurlencode($e->getMessage()));

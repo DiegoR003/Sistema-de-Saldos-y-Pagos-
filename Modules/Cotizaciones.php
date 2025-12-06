@@ -1,6 +1,7 @@
 <?php
 // Modules/cotizaciones.php
 require_once __DIR__ . '/../App/bd.php';
+require_once __DIR__ . '/../Includes/footer.php'; 
 $pdo = db();
 
 /* -------- Filtros -------- */
@@ -11,7 +12,7 @@ $hasta  = trim($_GET['f2']  ?? '');
 
 /* -------- Paginación -------- */
 $pag    = max(1, (int)($_GET['p'] ?? 1));
-$pp     = 10;
+$pp     = 4;
 $offset = ($pag-1)*$pp;
 
 /* -------- WHERE dinámico -------- */
@@ -30,6 +31,16 @@ $kpi = ['pendiente'=>0,'aprobada'=>0,'rechazada'=>0];
 foreach ($pdo->query("SELECT estado, COUNT(*) c FROM cotizaciones GROUP BY estado") as $r) {
   if (isset($kpi[$r['estado']])) $kpi[$r['estado']] = (int)$r['c'];
 }
+
+/* ---  Contar total de registros reales para la paginación --- */
+$sqlCount = "
+  SELECT COUNT(*) 
+  FROM cotizaciones c 
+  $W
+";
+$stCount = $pdo->prepare($sqlCount);
+$stCount->execute($args);
+$totalRows = (int)$stCount->fetchColumn(); // <--- Ahora sí tenemos el total real
 
 /* -------- Total rows + listado -------- */
 $st = $pdo->prepare("
@@ -254,11 +265,11 @@ $qs = $_GET; unset($qs['p']);
       <div class="d-flex flex-wrap gap-2 mt-2">
         <button class="btn btn-sm btn-outline-secondary js-ver" data-id="<?= $id ?>" data-bs-toggle="offcanvas" data-bs-target="#ocDetalleCot">Ver</button>
         <?php if ($r['estado']==='pendiente'): ?>
-          <form method="post" action="/Sistema-de-Saldos-y-Pagos-/Public/api/cotizacion_approve.php" class="d-inline" onsubmit="return confirm('¿Aprobar esta cotización?');">
+          <form method="post" action="/Sistema-de-Saldos-y-Pagos-/Public/api/cotizacion_approve.php" class="d-inline" onsubmit="aprobarConRFC(event)">
             <input type="hidden" name="id" value="<?= $id ?>">
             <button class="btn btn-sm btn-success">Aprobar</button>
           </form>
-          <form method="post" action="/Sistema-de-Saldos-y-Pagos-/Public/api/cotizacion_reject.php" class="d-inline" onsubmit="return confirm('¿Rechazar esta cotización?');">
+          <form method="post" action="/Sistema-de-Saldos-y-Pagos-/Public/api/cotizacion_reject.php" class="d-inline" onsubmit="confirmarAccion(event, '¿Rechazar cotización?', 'La cotización quedará marcada como rechazada.', 'Sí, rechazar', '#dc3545')">
             <input type="hidden" name="id" value="<?= $id ?>">
             <button class="btn btn-sm btn-danger">Rechazar</button>
           </form>
@@ -365,7 +376,7 @@ $qs = $_GET; unset($qs['p']);
 
   <div class="d-grid gap-2">
   <form id="fApr" method="post" action="/Sistema-de-Saldos-y-Pagos-/Public/api/cotizacion_approve.php"
-        onsubmit="return confirmarAprobacion();">
+        onsubmit="aprobarConRFC(event)">
     <input type="hidden" name="id" id="aprId">
     <input type="hidden" name="billing_json" id="billingJson">
     <!-- ✅ Este es el input que debe tener el valor del RFC -->
@@ -374,7 +385,7 @@ $qs = $_GET; unset($qs['p']);
   </form>
 
   <form id="fRej" method="post" action="/Sistema-de-Saldos-y-Pagos-/Public/api/cotizacion_reject.php"
-        onsubmit="return confirm('¿Rechazar esta cotización?');">
+       onsubmit="confirmarAccion(event, '¿Rechazar cotización?', 'La cotización quedará marcada como rechazada.', 'Sí, rechazar', '#dc3545')"> <input type="hidden" name="id" id="rejId">
     <input type="hidden" name="id" id="rejId">
     <button class="btn btn-outline-danger" id="btnRej" disabled>Rechazar</button>
   </form>
@@ -774,7 +785,44 @@ window.confirmarAprobacion = function() {
 })();
 </script>
 
+<script>
+// ... tus otros scripts ...
 
+// ✅ Nueva función: Valida RFC y luego muestra SweetAlert
+function aprobarConRFC(event) {
+  event.preventDefault(); // Detenemos el envío
+  const form = event.target;
+  const rfcId = document.getElementById('aprRfcIdHidden')?.value;
+
+  // 1. Validar RFC
+  if (!rfcId) {
+    Swal.fire({
+      icon: 'warning',
+      title: 'Falta RFC',
+      text: 'Por favor selecciona el RFC emisor antes de aprobar.',
+      confirmButtonColor: '#fdd835',
+      color: '#000'
+    });
+    return;
+  }
+
+  // 2. Si hay RFC, mostramos la confirmación bonita
+  Swal.fire({
+    title: '¿Aprobar cotización?',
+    text: "Se generará la orden de aprobación y se notificará al cliente.",
+    icon: 'question',
+    showCancelButton: true,
+    confirmButtonColor: '#198754', // Verde éxito
+    cancelButtonColor: '#6c757d',
+    confirmButtonText: 'Sí, aprobar',
+    cancelButtonText: 'Cancelar'
+  }).then((result) => {
+    if (result.isConfirmed) {
+      form.submit(); // Enviamos manualmente
+    }
+  });
+}
+</script>
 
 
  </body>

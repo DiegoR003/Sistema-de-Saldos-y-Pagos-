@@ -1,3 +1,15 @@
+// ============================================================
+  // 🔔 CONFIGURACIÓN DE SONIDO
+  // ============================================================
+  // Opción A: Si tienes el archivo en tu carpeta (Recomendado):
+  // const audioNotif = new Audio('/Sistema-de-Saldos-y-Pagos-/Public/assets/sounds/notification.mp3');
+  
+  // Opción B: Sonido de prueba online (Úsalo para probar ahorita):
+  const audioNotif = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
+  // ============================================================
+
+
+
 (function () {
   // 1. Verificamos que existan las variables globales definidas en header.php
   if (!window.APP_USER || !window.PUSHER_CONFIG || !APP_USER.id) {
@@ -111,6 +123,14 @@
     incrementCounter();
     showToast(n);
   }
+
+  // 2. 🔊 REPRODUCIR SONIDO
+    // Usamos catch porque los navegadores bloquean el sonido si el usuario 
+    // no ha interactuado con la página (hecho al menos un clic en cualquier lado).
+    audioNotif.play().catch(error => {
+        console.warn("El navegador bloqueó el sonido automático (requiere interacción previa):", error);
+    });
+  
 
   // 4. Escuchar el evento
   channel.bind('nueva-notificacion', handleNotification);

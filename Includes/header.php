@@ -44,6 +44,20 @@ $usuarioRol = $currentUser['rol'] ?? $_SESSION['usuario_rol'] ?? 'guest';
 $userName = $currentUser['nombre'] ?? 'Usuario';
 $userInitial = mb_substr($userName, 0, 1, 'UTF-8');
 
+
+
+$fotoUsuario = '';
+if ($usuarioId > 0) {
+    $stUser = $pdo->prepare("SELECT nombre, foto_url FROM usuarios WHERE id = ? LIMIT 1");
+    $stUser->execute([$usuarioId]);
+    $datosFrescos = $stUser->fetch(PDO::FETCH_ASSOC);
+    
+    if ($datosFrescos) {
+        $userName    = $datosFrescos['nombre']; // Actualiza el nombre si cambió
+        $fotoUsuario = $datosFrescos['foto_url']; // Obtiene la foto real
+    }
+}
+
 // -------------------------------------------------------------------
 //  Cargar notificaciones para el header
 // -------------------------------------------------------------------
@@ -453,7 +467,15 @@ if ($usuarioId) {
                   id="dropdownUsuario"
                   data-bs-toggle="dropdown"
                   aria-expanded="false">
-            <div class="avatar-circle"><?= strtoupper($userInitial) ?></div>
+            <div class="avatar-circle" style="overflow: hidden;">
+              <?php if (!empty($fotoUsuario)): ?>
+                <img src="<?= htmlspecialchars($fotoUsuario) ?>?v=<?= time() ?>" 
+                     alt="User" 
+                     >
+              <?php else: ?>
+                <?= strtoupper($userInitial) ?>
+              <?php endif; ?>
+            </div>
             <span class="d-none d-md-inline"><?= htmlspecialchars($userName) ?></span>
           </button>
           <ul class="dropdown-menu dropdown-menu-end user-menu shadow" aria-labelledby="dropdownUsuario">

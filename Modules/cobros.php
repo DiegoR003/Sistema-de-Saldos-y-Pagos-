@@ -20,6 +20,13 @@ $stCli = $pdo->query("
 ");
 $clientes = $stCli->fetchAll(PDO::FETCH_ASSOC);
 
+/* =========================
+    PAGINACIÓN
+   ========================= */
+
+$page   = max(1, (int)($_GET['p'] ?? 1));
+$limit  = 7; // Cobros suele ser una lista larga, 10 está bien (o pon 5 si prefieres)
+$offset = ($page - 1) * $limit;
 
 
 /* =========================
@@ -58,7 +65,7 @@ switch ($rango) {
 }
 
 $sql = "
-SELECT
+SELECT SQL_CALC_FOUND_ROWS
   cg.id,
   LPAD(cg.id, 6, '0')              AS folio,
   cg.periodo_inicio,
@@ -82,6 +89,7 @@ GROUP BY
   cg.id, cg.periodo_inicio, cg.periodo_fin,
   cg.total, cg.estatus, cg.creado_en, c.empresa
 ORDER BY cg.periodo_inicio DESC
+LIMIT $limit OFFSET $offset
 ";
 
 
@@ -90,6 +98,10 @@ ORDER BY cg.periodo_inicio DESC
 $st = $pdo->prepare($sql);
 $st->execute($args);
 $rows = $st->fetchAll(PDO::FETCH_ASSOC);
+
+// Total de filas
+$totalRows = $pdo->query("SELECT FOUND_ROWS()")->fetchColumn();
+$totalPages = ceil($totalRows / $limit);
 
 function money_mx($v){ return '$'.number_format((float)$v, 2, '.', ','); }
 function fmt_date($d){ return date('Y-m-d', strtotime($d)); }
@@ -269,7 +281,7 @@ function cobrosUrl(string $rangoValue, int $clienteId): string {
       Historial de Cobros
     </div>
 
-    <div class="table-wrap">
+    <div class="table-wrap scroll-container">
       <table class="table align-middle mb-0" id="tblCobros">
         <thead class="table-light">
           <tr>
@@ -330,16 +342,18 @@ function cobrosUrl(string $rangoValue, int $clienteId): string {
     </div>
 
     <!-- Paginación simple (decorativa por ahora) -->
-    <div class="card-body d-flex flex-wrap justify-content-between align-items-center gap-2">
-      <?php $total = count($rows); ?>
-      <small class="text-muted" id="lblCount">
-        Mostrando <?= $total ? "1 a {$total} de {$total}" : "0 de 0" ?> registros
-      </small>
+    <div class="card-footer bg-white d-flex justify-content-between align-items-center">
+      <small class="text-muted">Mostrando <?= count($rows) ?> cobros</small>
+      
+      <?php if ($totalPages > 1): ?>
       <ul class="pagination pagination-sm m-0">
-        <li class="page-item disabled"><span class="page-link">Anterior</span></li>
-        <li class="page-item active"><span class="page-link">1</span></li>
-        <li class="page-item disabled"><span class="page-link">Siguiente</span></li>
+        <li class="page-item <?= ($page <= 1) ? 'disabled' : '' ?>">
+          <a class="page-link" href="?m=cobros&p=<?= $page - 1 ?>&cliente_id=<?= $clienteId ?>&rango=<?= $rango ?>">Anterior</a>
+        </li>
+        <li class="page-item disabled"><span class="page-link"><?= $page ?></span></li>
+        <li class="page-item <?= ($page >= $totalPages) ? 'disabled' : '' ?>">
+          <a class="page-link" href="?m=cobros&p=<?= $page + 1 ?>&cliente_id=<?= $clienteId ?>&rango=<?= $rango ?>">Siguiente</a>
+        </li>
       </ul>
+      <?php endif; ?>
     </div>
-  </div>
-</div>

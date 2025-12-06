@@ -69,6 +69,23 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
                 : [];
 
             $debug .= "SESIÓN CREADA - Redirigiendo...<br>";
+
+            // Guardar IDs de roles
+            $rolesIds = $u['roles_csv'] ? array_map('intval', explode(',', $u['roles_csv'])) : [];
+            $_SESSION['user_roles'] = $rolesIds;
+
+            // ✅ NUEVO: Guardar el nombre del rol principal (para evitar consultas extra)
+            // Buscamos el nombre del primer rol que tenga
+            if (!empty($rolesIds)) {
+                $stRol = $pdo->prepare("SELECT nombre FROM roles WHERE id = ? LIMIT 1");
+                $stRol->execute([$rolesIds[0]]);
+                $nombreRol = $stRol->fetchColumn();
+                $_SESSION['user_rol'] = strtolower($nombreRol); // Guardamos "admin", "operador", etc.
+                $_SESSION['usuario_rol'] = strtolower($nombreRol); // Compatibilidad con código viejo
+            } else {
+                $_SESSION['user_rol'] = 'guest';
+                $_SESSION['usuario_rol'] = 'guest';
+            }
             
             header('Location: /Sistema-de-Saldos-y-Pagos-/Public/index.php');
             exit;

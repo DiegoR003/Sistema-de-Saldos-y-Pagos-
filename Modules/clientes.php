@@ -18,6 +18,11 @@ if ($q !== '') {
   $args[] = $searchTerm;
 }
 
+// --- PAGINACIÓN ---
+$page   = max(1, (int)($_GET['p'] ?? 1));
+$limit  = 5; // Cantidad de clientes por página
+$offset = ($page - 1) * $limit;
+
 $vista = $_GET['vista'] ?? 'todos';
 $having = '';
 
@@ -28,7 +33,7 @@ if ($vista === 'activos') {
 }
 
 $sql = "
-SELECT
+SELECT SQL_CALC_FOUND_ROWS
   c.id, c.empresa, c.correo, c.telefono,
   MIN(o.creado_en) AS fecha_alta,
   SUM(CASE WHEN o.estado = 'activa' THEN 1 ELSE 0 END) AS ordenes_activas,
@@ -46,11 +51,16 @@ LEFT JOIN orden_items oi ON oi.orden_id = o.id
 {$where}
 GROUP BY c.id, c.empresa, c.correo, c.telefono
 ORDER BY c.empresa ASC
+LIMIT $limit OFFSET $offset
 ";
 
 $st = $pdo->prepare($sql);
 $st->execute($args);
 $rows = $st->fetchAll(PDO::FETCH_ASSOC);
+
+// Contar total de registros para calcular páginas
+$totalRows = $pdo->query("SELECT FOUND_ROWS()")->fetchColumn();
+$totalPages = ceil($totalRows / $limit);
 
 function money_mx($v): string { return '$' . number_format((float)$v, 2, '.', ','); }
 
@@ -158,7 +168,7 @@ function fmt_date(?string $d): string {
   <div class="card border-0 shadow-sm table-wrapper">
     <div class="card-body">
       <h5 class="mb-3">Clientes en Proceso</h5>
-      <div class="table-responsive">
+      <div class="table-responsive ">
         <table class="table align-middle mb-0">
           <thead>
             <tr>
@@ -213,6 +223,31 @@ function fmt_date(?string $d): string {
       </div>
     </div>
   </div>
+
+   <!-- Paginación -->
+  <?php if ($totalPages > 1): ?>
+  <nav class="mt-4 pb-4">
+    <ul class="pagination justify-content-center">
+      <li class="page-item <?= ($page <= 1) ? 'disabled' : '' ?>">
+        <a class="page-link" href="?m=clientes&p=<?= $page - 1 ?>&q=<?= htmlspecialchars($q) ?>">
+          Anterior
+        </a>
+      </li>
+      
+      <li class="page-item disabled">
+        <span class="page-link text-muted">
+          Página <?= $page ?> de <?= $totalPages ?> (Total: <?= $totalRows ?>)
+        </span>
+      </li>
+
+      <li class="page-item <?= ($page >= $totalPages) ? 'disabled' : '' ?>">
+        <a class="page-link" href="?m=clientes&p=<?= $page + 1 ?>&q=<?= htmlspecialchars($q) ?>">
+          Siguiente
+        </a>
+      </li>
+    </ul>
+  </nav>
+  <?php endif; ?>
 
   <!-- Cards móvil -->
   <div>

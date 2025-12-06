@@ -6,8 +6,13 @@
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
 
 <script src="https://js.pusher.com/8.2/pusher.min.js"></script>
+
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+
 
 <script src="/Sistema-de-Saldos-y-Pagos-/Public/js/notificaciones.js"></script>
 <script>
@@ -77,3 +82,73 @@ document.addEventListener('DOMContentLoaded', function() {
   });
 });
 </script>
+
+<script>
+/* =========================================================
+   A. CONFIGURACIÓN GLOBAL (Toasts y Confirmaciones)
+   ========================================================= */
+
+// Definir el estilo "Toast" (Notificación pequeña en la esquina)
+const Toast = Swal.mixin({
+  toast: true,
+  position: 'top-end',
+  showConfirmButton: false,
+  timer: 4000,
+  timerProgressBar: true,
+  didOpen: (toast) => {
+    toast.addEventListener('mouseenter', Swal.stopTimer)
+    toast.addEventListener('mouseleave', Swal.resumeTimer)
+  }
+});
+
+/* =========================================================
+   B. DETECTAR MENSAJES DE PHP (URL params: ok, msg, err)
+   ========================================================= */
+document.addEventListener('DOMContentLoaded', () => {
+  const params = new URLSearchParams(window.location.search);
+  
+  if (params.has('ok')) {
+    const msg = params.get('msg') || 'Operación exitosa';
+    Toast.fire({
+      icon: 'success',
+      title: decodeURIComponent(msg.replace(/\+/g, ' '))
+    });
+  }
+  
+  if (params.has('err')) {
+    const err = params.get('err') || 'Ocurrió un error';
+    Toast.fire({
+      icon: 'error',
+      title: decodeURIComponent(err.replace(/\+/g, ' '))
+    });
+  }
+});
+
+/* =========================================================
+   C. FUNCIÓN PARA CONFIRMAR ACCIONES (Formularios)
+   ========================================================= */
+function confirmarAccion(event, titulo, texto, btnTexto, colorBtn = '#fdd835') {
+  event.preventDefault(); // Detiene el envío inmediato del formulario
+  const form = event.target; // El formulario que disparó el evento
+
+  Swal.fire({
+    title: titulo || '¿Estás seguro?',
+    text: texto || "Esta acción no se puede deshacer",
+    icon: 'question',
+    showCancelButton: true,
+    confirmButtonColor: colorBtn,
+    cancelButtonColor: '#6c757d',
+    confirmButtonText: btnTexto || 'Sí, continuar',
+    cancelButtonText: 'Cancelar',
+    // Personalización para que combine con Banana Group
+    color: '#000',
+    background: '#fff'
+  }).then((result) => {
+    if (result.isConfirmed) {
+      form.submit(); // Si dice que sí, enviamos el formulario manualmente
+    }
+  });
+}
+</script>
+
+

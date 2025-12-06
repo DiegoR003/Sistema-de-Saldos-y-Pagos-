@@ -181,7 +181,7 @@ $finMes   = $finMesDT->format('Y-m-d');
   <?php endif; ?>
 
     <!-- Listado de clientes / órdenes -->
-  <div class="vstack gap-3">
+  <div class="scroll-container vstack gap-3">
     <?php foreach ($rows as $r):
       // total mensual estimado con IVA (sólo para mostrar en lista)
       $mensualConIVA     = round((float)$r['mensual_base'] * 1.16, 2);
@@ -239,7 +239,7 @@ $finMes   = $finMesDT->format('Y-m-d');
               <!-- Botón 2: Emitir / Notificar (mes actual) -->
               <form method="post"
                     action="/Sistema-de-Saldos-y-Pagos-/Public/api/cargos_emitir.php"
-                    onsubmit="return confirm('¿Emitir/actualizar el cargo de este mes y notificar al cliente?');">
+                   onsubmit="confirmarAccion(event, '¿Emitir cargo del mes?', 'Se generará el cargo y se notificará al cliente.', 'Sí, emitir', '#fdd835')">
                 <input type="hidden" name="orden_id" value="<?= (int)$r['orden_id'] ?>">
                 <input type="hidden" name="periodo_inicio" value="<?= $iniMes ?>">
                 <input type="hidden" name="periodo_fin" value="<?= $finMes ?>">
