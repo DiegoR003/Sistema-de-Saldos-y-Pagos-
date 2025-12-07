@@ -15,7 +15,7 @@ if (!$currentUser) {
 
 // Paginación
 $page = max(1, (int)($_GET['p'] ?? 1));
-$limit = 5; 
+$limit = 2; 
 $offset = ($page - 1) * $limit;
 
 // Obtener total

@@ -385,7 +385,7 @@ $qs = $_GET; unset($qs['p']);
   </form>
 
   <form id="fRej" method="post" action="/Sistema-de-Saldos-y-Pagos-/Public/api/cotizacion_reject.php"
-       onsubmit="confirmarAccion(event, '¿Rechazar cotización?', 'La cotización quedará marcada como rechazada.', 'Sí, rechazar', '#dc3545')"> <input type="hidden" name="id" id="rejId">
+       onsubmit="confirmarAccion(event, '¿Rechazar cotización?', 'La cotización quedará marcada como rechazada.', 'Sí, rechazar', '#dc3545')"> 
     <input type="hidden" name="id" id="rejId">
     <button class="btn btn-outline-danger" id="btnRej" disabled>Rechazar</button>
   </form>
@@ -824,6 +824,41 @@ function aprobarConRFC(event) {
 }
 </script>
 
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // 1. Verificar que Pusher esté activo y tengamos usuario
+    if (typeof Pusher === 'undefined' || !window.PUSHER_CONFIG || !window.APP_USER) return;
+
+    // 2. Conectar a Pusher (si no está conectado globalmente)
+    const pusher = new Pusher(window.PUSHER_CONFIG.key, {
+        cluster: window.PUSHER_CONFIG.cluster,
+        forceTLS: true
+    });
+
+    // 3. Suscribirse al canal personal del usuario
+    const channelName = 'notificaciones_user_' + window.APP_USER.id;
+    const channel = pusher.subscribe(channelName);
+
+    // 4. Escuchar el evento "nueva-notificacion"
+    channel.bind('nueva-notificacion', function(data) {
+        // Verificar si la notificación es sobre una COTIZACIÓN
+        // (data.ref_tipo viene de la BD, asegurémonos que coincida)
+        if (data.ref_tipo === 'cotizacion' && data.titulo.includes('Nueva')) {
+            
+            // Mostrar un Toast de aviso (Opcional, porque el header ya lo hace)
+            const Toast = Swal.mixin({
+                toast: true, position: 'top-end', showConfirmButton: false, timer: 3000, timerProgressBar: true
+            });
+            Toast.fire({ icon: 'info', title: 'Nueva cotización recibida. Actualizando...' });
+
+            // ⚡ RECARGAR LA PÁGINA AUTOMÁTICAMENTE
+            setTimeout(() => {
+                window.location.reload(); 
+            }, 2000); // Esperamos 2 seg para que lean la notificación y luego recargamos
+        }
+    });
+});
+</script>
 
  </body>
 </html>

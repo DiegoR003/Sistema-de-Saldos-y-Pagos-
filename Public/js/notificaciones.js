@@ -5,7 +5,7 @@
   // const audioNotif = new Audio('/Sistema-de-Saldos-y-Pagos-/Public/assets/sounds/notification.mp3');
   
   // Opción B: Sonido de prueba online (Úsalo para probar ahorita):
-  const audioNotif = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
+ // const audioNotif = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
   // ============================================================
 
 
