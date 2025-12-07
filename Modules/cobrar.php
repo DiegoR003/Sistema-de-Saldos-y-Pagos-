@@ -33,6 +33,7 @@ if ($vista === 'pagados') {
 
 
 // --- Consulta: órdenes activas + cliente + suma mensual base (items recurrentes no pausados) ---
+
 $sql = "
 SELECT
   o.id                                                AS orden_id,
@@ -46,10 +47,15 @@ SELECT
   ANY_VALUE(c.correo)                                 AS correo,
   ANY_VALUE(c.telefono)                               AS telefono,
 
-  COALESCE(SUM(CASE
-    WHEN oi.billing_type='recurrente' AND oi.pausado=0 THEN oi.monto
-    ELSE 0 END),0)                                    AS mensual_base,
+  (
+    SELECT COALESCE(SUM(monto), 0)
+    FROM orden_items
+    WHERE orden_id = o.id
+      AND billing_type = 'recurrente'
+      AND pausado = 0
+  ) AS mensual_base,
 
+  /* Contadores de estatus de cargos */
   COALESCE(SUM(CASE
     WHEN cg.estatus='pagado' THEN 1
     ELSE 0 END),0)                                    AS cargos_pagados,
@@ -60,7 +66,7 @@ SELECT
 
 FROM ordenes o
 JOIN clientes c          ON c.id = o.cliente_id
-LEFT JOIN orden_items oi ON oi.orden_id = o.id
+/* LEFT JOIN orden_items oi ... <-- ELIMINAMOS ESTE JOIN QUE CAUSABA EL BUG */
 LEFT JOIN cargos cg      ON cg.orden_id = o.id
 {$where}
 GROUP BY o.id
