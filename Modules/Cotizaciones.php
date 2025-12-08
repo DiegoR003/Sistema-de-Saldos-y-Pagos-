@@ -223,7 +223,6 @@ $qs = $_GET; unset($qs['p']);
                 <button class="btn btn-sm btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown">Más</button>
                 <ul class="dropdown-menu dropdown-menu-end">
                   <li><a class="dropdown-item" href="#">Descargar PDF</a></li>
-                  <li><a class="dropdown-item" href="#">Enviar por WhatsApp</a></li>
                 </ul>
               </div>
             </td>
