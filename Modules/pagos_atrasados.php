@@ -3,19 +3,127 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../App/bd.php';
+require_once __DIR__ . '/../App/notifications.php';
+
+// Cargar Mailer si existe
+if (file_exists(__DIR__ . '/../App/mailer.php')) {
+    require_once __DIR__ . '/../App/mailer.php';
+}
 
 $pdo = db();
-
-/**
- * Pagos atrasados:
- *  - órdenes activas
- *  - cargos emitidos, aún no pagados
- *  - cuyo periodo_fin ya pasó (vencidos)
- */
 $hoy = (new DateTimeImmutable('today'))->format('Y-m-d');
 
+/* =============================================================================
+   LÓGICA DE NOTIFICACIÓN AUTOMÁTICA AL STAFF (ADMIN / OPERADOR)
+   - Se ejecuta al cargar la vista.
+   - Revisa órdenes vencidas.
+   - Si no se ha notificado hoy, envía alerta y correo al staff.
+   ============================================================================= */
+function ejecutarNotificacionesAutomaticas($pdo, $hoy) {
+    // 1. Buscar órdenes con cargos vencidos
+    $sqlVencidos = "
+        SELECT 
+            o.id AS orden_id,
+            c.empresa,
+            c.id AS cliente_id,
+            COUNT(cg.id) as cargos_vencidos,
+            SUM(cg.total) as total_deuda
+        FROM cargos cg
+        JOIN ordenes o ON o.id = cg.orden_id
+        JOIN clientes c ON c.id = o.cliente_id
+        WHERE o.estado = 'activa'
+          AND cg.estatus = 'emitido'
+          AND cg.periodo_fin < :hoy
+        GROUP BY o.id
+    ";
+    $st = $pdo->prepare($sqlVencidos);
+    $st->execute([':hoy' => $hoy]);
+    $deudores = $st->fetchAll(PDO::FETCH_ASSOC);
 
+    if (empty($deudores)) return;
 
+    // 2. Obtener Staff (Admins y Operadores)
+    $sqlStaff = "
+        SELECT DISTINCT u.id, u.nombre, u.correo 
+        FROM usuarios u
+        JOIN usuario_rol ur ON ur.usuario_id = u.id
+        JOIN roles r ON r.id = ur.rol_id
+        WHERE r.nombre IN ('admin', 'operador') AND u.activo = 1
+    ";
+    $staff = $pdo->query($sqlStaff)->fetchAll(PDO::FETCH_ASSOC);
+
+    // 3. Procesar cada deudor
+    foreach ($deudores as $d) {
+        $ordenId = $d['orden_id'];
+        
+        // --- FILTRO ANTI-SPAM (24 HORAS) ---
+        // Verificamos si ya notificamos sobre ESTA orden en las últimas 24 horas
+        // Usamos 'ref_tipo' = 'alerta_vencimiento'
+        $stCheck = $pdo->prepare("
+            SELECT id FROM notificaciones 
+            WHERE ref_tipo = 'alerta_vencimiento' 
+              AND ref_id = ? 
+              AND creado_en > DATE_SUB(NOW(), INTERVAL 24 HOUR)
+            LIMIT 1
+        ");
+        $stCheck->execute([$ordenId]);
+        
+        if ($stCheck->fetch()) {
+            continue; // Ya avisamos hoy, saltar.
+        }
+
+        // --- ENVIAR AVISOS AL STAFF ---
+        $deudaFmt = number_format((float)$d['total_deuda'], 2);
+        
+        foreach ($staff as $usuario) {
+            // A) Campanita
+            $notifData = [
+                'tipo'       => 'sistema',
+                'canal'      => 'interna',
+                'titulo'     => '⚠️ Pago Atrasado Detectado',
+                'cuerpo'     => "El cliente {$d['empresa']} tiene {$d['cargos_vencidos']} cargos vencidos. Total: $ {$deudaFmt}",
+                'usuario_id' => $usuario['id'],
+                'cliente_id' => $d['cliente_id'],
+                'ref_tipo'   => 'alerta_vencimiento', // Clave para el filtro anti-spam
+                'ref_id'     => $ordenId,
+                'estado'     => 'pendiente' // Pendiente de leer
+            ];
+            // Al guardar esto, se crea el registro que bloquea el spam por 24h
+            enviar_notificacion($pdo, $notifData, true);
+
+            // B) Correo
+            if (function_exists('enviar_correo_sistema')) {
+                $asunto = "Alerta de Cobranza: {$d['empresa']}";
+                $html = "
+                <div style='font-family: Arial; padding: 20px; border: 1px solid #eee;'>
+                    <h3 style='color: #dc3545;'>Alerta de Sistema: Pago Vencido</h3>
+                    <p>Se ha detectado un cliente con pagos retrasados en el sistema.</p>
+                    <ul>
+                        <li><strong>Cliente:</strong> {$d['empresa']}</li>
+                        <li><strong>Cargos vencidos:</strong> {$d['cargos_vencidos']}</li>
+                        <li><strong>Deuda Total:</strong> $ {$deudaFmt}</li>
+                    </ul>
+                    <p>Por favor revisa el módulo de <strong>Pagos Atrasados</strong> para gestionar el cobro.</p>
+                    <p><small>Este es un aviso automático generado al revisar la lista de deudores.</small></p>
+                </div>";
+                
+                enviar_correo_sistema($usuario['correo'], $usuario['nombre'], $asunto, $html);
+            }
+        }
+    }
+}
+
+// Ejecutamos la función silenciosamente al cargar la página
+try {
+    ejecutarNotificacionesAutomaticas($pdo, $hoy);
+} catch (Exception $e) {
+    // Si falla, no rompemos la vista, solo lo registramos en logs o ignoramos
+    // error_log($e->getMessage());
+}
+
+/* =============================================================================
+   CONSULTA PRINCIPAL PARA LA VISTA (Tu código original)
+   ============================================================================= */
 
 $sql = "
 SELECT
@@ -64,11 +172,6 @@ function prettify_periodicidad(?string $p): string {
         default:          return 'Servicio';
     }
 }
-
-function atrasadosUrl(string $vistaValue): string {
-    return "/Sistema-de-Saldos-y-Pagos-/Public/index.php?m=pagos_atrasados&vista={$vistaValue}";
-}
-
 ?>
 
 <style>
@@ -96,25 +199,12 @@ function atrasadosUrl(string $vistaValue): string {
 </style>
 
 <div class="container-fluid overdues">
-  <!-- Título + "Mostrar" -->
   <div class="d-flex align-items-center justify-content-between flex-wrap topbar mb-3">
     <h3 class="mb-0 fw-semibold">
       Pagos atrasados <span class="text-muted fs-6">Control panel</span>
     </h3>
-
-    <div class="dropdown">
-     <!-- <button class="btn btn-light border dropdown-toggle" data-bs-toggle="dropdown" type="button">
-        Mostrar
-      </button>
-      <ul class="dropdown-menu dropdown-menu-end">
-        <li><a class="dropdown-item" href="#">Todos</a></li>
-        <li><a class="dropdown-item" href="#">Últimos 7 días</a></li>
-        <li><a class="dropdown-item" href="#">Últimos 30 días</a></li>
-      </ul> -->
-    </div>
   </div>
 
-  <!-- Buscador (front-end) -->
   <div class="card border-0 shadow-sm search-card mb-3">
     <div class="card-body">
       <div class="input-group">
@@ -150,7 +240,6 @@ function atrasadosUrl(string $vistaValue): string {
             <div>
               <div class="name mb-1"><?= htmlspecialchars($nombre) ?></div>
               <div class="meta">
-                <!-- <div>Dirección: <span class="text-dark">—</span></div>-->
                 <div>Teléfono: <span class="text-dark"><?= htmlspecialchars($telefono) ?></span></div>
                 <div>Servicio contratado:
                   <span class="text-decoration-none"><?= htmlspecialchars($periodo) ?></span>
@@ -171,11 +260,19 @@ function atrasadosUrl(string $vistaValue): string {
             </div>
 
             <div class="actions d-flex align-items-start gap-2">
-              <!-- Aquí tú puedes cambiar la URL/acción de cobro -->
+              
               <a href="/Sistema-de-Saldos-y-Pagos-/Modules/cobro.php?m=cobro&orden_id=<?= (int)$r['orden_id'] ?>"
                  class="btn btn-sm btn-cobrar">
                 <i class="bi bi-cash-coin me-1"></i> Cobrar
               </a>
+
+               <form method="post" action="/Sistema-de-Saldos-y-Pagos-/Public/api/pago_recordatorio.php"
+                    onsubmit="confirmarAccion(event, '¿Reenviar recordatorio?', 'Se enviará un correo manual al cliente.', 'Sí, enviar', '#0dcaf0')">
+                  <input type="hidden" name="orden_id" value="<?= (int)$r['orden_id'] ?>">
+                  <button class="btn btn-sm btn-info text-white" title="Reenviar recordatorio manual">
+                    <i class="bi bi-envelope-paper-fill"></i>
+                  </button>
+              </form>
 
               <button type="button"
                       class="btn btn-sm btn-det"
@@ -187,8 +284,9 @@ function atrasadosUrl(string $vistaValue): string {
                       data-servicio="<?= htmlspecialchars($periodo . ' ' . money_mx($monto)) ?>"
                       data-periodo="<?= $desdeTxt . ' – ' . $hastaTxt ?>"
                       data-vencidos="<?= $vencidos ?>">
-                <i class="bi bi-person-badge me-1"></i> Detalles Cliente
+                <i class="bi bi-person-badge me-1"></i> Detalles
               </button>
+
             </div>
           </div>
         </div>
@@ -198,13 +296,12 @@ function atrasadosUrl(string $vistaValue): string {
   <?php endif; ?>
 </div>
 
-<!-- Modal Detalles Cliente -->
 <div class="modal fade" id="clienteDetModal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content">
       <div class="modal-header">
         <h5 class="modal-title">Detalles del cliente</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
       <div class="modal-body">
         <p><strong>Cliente:</strong> <span id="detNombre"></span></p>
@@ -213,9 +310,7 @@ function atrasadosUrl(string $vistaValue): string {
         <p><strong>Servicio:</strong> <span id="detServicio"></span></p>
         <p><strong>Periodo vencido:</strong> <span id="detPeriodo"></span></p>
         <p><strong>Pagos vencidos:</strong> <span id="detVencidos"></span></p>
-        <small class="text-muted">
-          Desde aquí sólo es informativo. La acción de cobro se realiza con el botón verde “Cobrar”.
-        </small>
+        <small class="text-muted">La alerta automática ya fue procesada si correspondía.</small>
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
@@ -225,8 +320,8 @@ function atrasadosUrl(string $vistaValue): string {
 </div>
 
 <script>
-/* Filtro simple por nombre o teléfono (front-end) */
 (function(){
+  // Filtro
   const q = document.getElementById('qOver');
   const btn = document.getElementById('btnSearchOver');
   const cards = Array.from(document.querySelectorAll('.overdues .cliente-card'));
@@ -239,32 +334,22 @@ function atrasadosUrl(string $vistaValue): string {
       c.style.display = (!term || name.includes(term) || phone.includes(term)) ? '' : 'none';
     });
   }
-  q.addEventListener('input', filtrar);
-  btn.addEventListener('click', filtrar);
-})();
+  if(q) q.addEventListener('input', filtrar);
+  if(btn) btn.addEventListener('click', filtrar);
 
-/* Rellenar el modal Detalles Cliente */
-(function(){
+  // Modal
   const modal = document.getElementById('clienteDetModal');
-  if (!modal) return;
-
-  modal.addEventListener('show.bs.modal', function (event) {
-    const button   = event.relatedTarget;
-    if (!button) return;
-
-    const nombre   = button.getAttribute('data-nombre')   || '—';
-    const correo   = button.getAttribute('data-correo')   || '—';
-    const telefono = button.getAttribute('data-telefono') || '—';
-    const servicio = button.getAttribute('data-servicio') || '—';
-    const periodo  = button.getAttribute('data-periodo')  || '—';
-    const vencidos = button.getAttribute('data-vencidos') || '1';
-
-    modal.querySelector('#detNombre').textContent   = nombre;
-    modal.querySelector('#detCorreo').textContent   = correo;
-    modal.querySelector('#detTelefono').textContent = telefono;
-    modal.querySelector('#detServicio').textContent = servicio;
-    modal.querySelector('#detPeriodo').textContent  = periodo;
-    modal.querySelector('#detVencidos').textContent = vencidos;
-  });
+  if (modal) {
+    modal.addEventListener('show.bs.modal', function (event) {
+      const button = event.relatedTarget;
+      if (!button) return;
+      modal.querySelector('#detNombre').textContent   = button.getAttribute('data-nombre') || '—';
+      modal.querySelector('#detCorreo').textContent   = button.getAttribute('data-correo') || '—';
+      modal.querySelector('#detTelefono').textContent = button.getAttribute('data-telefono') || '—';
+      modal.querySelector('#detServicio').textContent = button.getAttribute('data-servicio') || '—';
+      modal.querySelector('#detPeriodo').textContent  = button.getAttribute('data-periodo') || '—';
+      modal.querySelector('#detVencidos').textContent = button.getAttribute('data-vencidos') || '0';
+    });
+  }
 })();
 </script>

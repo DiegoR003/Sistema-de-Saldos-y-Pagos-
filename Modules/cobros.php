@@ -293,6 +293,7 @@ function cobrosUrl(string $rangoValue, int $clienteId): string {
             <th>Método de pago</th>
             <th># Depósito</th>
             <th class="text-end">Estado</th>
+            <th class="text-end">Acciones</th>
           </tr>
         </thead>
         <tbody>
@@ -332,6 +333,15 @@ function cobrosUrl(string $rangoValue, int $clienteId): string {
       <?= htmlspecialchars($estatus) ?>
     </span>
   </td>
+  <td class="text-end">
+    <?php if ($estatus === 'pagado'): ?>
+        <a href="/Sistema-de-Saldos-y-Pagos-/Public/api/descargar_recibo.php?id=<?= $r['pago_id'] ?>" 
+           target="_blank" 
+           class="btn btn-sm btn-outline-secondary">
+            <i class="bi bi-eye"></i>
+        </a>
+    <?php endif; ?>
+</td>
 </tr>
 <?php endforeach; ?>
 
