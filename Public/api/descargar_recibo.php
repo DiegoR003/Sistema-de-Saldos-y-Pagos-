@@ -10,24 +10,33 @@ require_once __DIR__ . '/../../App/auth.php';
 use Dompdf\Dompdf;
 use Dompdf\Options;
 
-// Seguridad: Solo usuarios logueados
+// Seguridad: Solo usuarios logueados pueden descargar
 if (session_status() === PHP_SESSION_NONE) session_start();
 if (!current_user()) {
-    die("Acceso denegado");
+    die("Acceso denegado. Debes iniciar sesión.");
 }
 
+// Validar ID
 $pagoId = (int)($_GET['id'] ?? 0);
-if ($pagoId <= 0) die("ID de pago inválido");
+if ($pagoId <= 0) die("ID de pago inválido.");
 
 $pdo = db();
 
 // 2. Obtener datos del Pago, Cliente y Cargo
+// Hacemos JOINs para tener toda la info en una sola consulta
 $sql = "
     SELECT 
-        p.id as pago_id, p.monto, p.metodo, p.referencia, p.creado_en as fecha_pago,
-        c.empresa, c.correo, c.telefono,
-        cg.periodo_inicio, cg.periodo_fin,
-        o.id as orden_id
+        p.id as pago_id, 
+        p.monto, 
+        p.metodo, 
+        p.referencia, 
+        p.creado_en as fecha_pago, 
+        p.cargo_id,
+        c.empresa, 
+        c.correo, 
+        c.telefono,
+        cg.periodo_inicio, 
+        cg.periodo_fin
     FROM pagos p
     JOIN ordenes o ON o.id = p.orden_id
     JOIN clientes c ON c.id = o.cliente_id
@@ -39,104 +48,192 @@ $st = $pdo->prepare($sql);
 $st->execute([$pagoId]);
 $datos = $st->fetch(PDO::FETCH_ASSOC);
 
-if (!$datos) die("Pago no encontrado");
+if (!$datos) die("El pago no existe o fue eliminado.");
 
-// Formatos
-$folio    = str_pad((string)$datos['pago_id'], 6, '0', STR_PAD_LEFT);
-$fecha    = date('d/m/Y H:i', strtotime($datos['fecha_pago']));
-$monto    = '$' . number_format((float)$datos['monto'], 2);
-$periodo  = "Pago general";
-if ($datos['periodo_inicio']) {
-    $periodo = date('d/m/Y', strtotime($datos['periodo_inicio'])) . ' al ' . date('d/m/Y', strtotime($datos['periodo_fin']));
+// 3. Obtener el DESGLOSE (Los servicios específicos)
+// Buscamos en la tabla 'cargo_items' que guarda qué se cobró exactamente
+$items = [];
+if (!empty($datos['cargo_id'])) {
+    $stItems = $pdo->prepare("SELECT concepto, total FROM cargo_items WHERE cargo_id = ?");
+    $stItems->execute([$datos['cargo_id']]);
+    $items = $stItems->fetchAll(PDO::FETCH_ASSOC);
 }
 
-// 3. Crear el HTML del Recibo (Diseño)
-// Puedes poner tu logo real en base64 o ruta absoluta
+// 4. Preparar variables para el PDF
+$folio         = str_pad((string)$datos['pago_id'], 6, '0', STR_PAD_LEFT); // Ej: 000123
+// Limpiamos el nombre de la empresa para que sea seguro en el nombre del archivo
+$empresaSafe   = preg_replace('/[^a-zA-Z0-9]/', '_', $datos['empresa']); 
+$nombreArchivo = "Recibo_Pago_{$empresaSafe}_{$folio}.pdf";
+
+$fecha      = date('d/m/Y H:i', strtotime($datos['fecha_pago']));
+$montoTotal = number_format((float)$datos['monto'], 2);
+
+$periodoTxt = "Pago a cuenta";
+if ($datos['periodo_inicio']) {
+    $periodoTxt = date('d/m/Y', strtotime($datos['periodo_inicio'])) . ' al ' . date('d/m/Y', strtotime($datos['periodo_fin']));
+}
+
+// 5. Cargar el Logo (Conversión a Base64 para evitar errores de rutas en PDF)
+$rutaLogo = __DIR__ . '/../../Public/assets/logo.png'; 
+$logoBase64 = '';
+if (file_exists($rutaLogo)) {
+    $type = pathinfo($rutaLogo, PATHINFO_EXTENSION);
+    $data = file_get_contents($rutaLogo);
+    $logoBase64 = 'data:image/' . $type . ';base64,' . base64_encode($data);
+}
+
+// 6. Construir el HTML con el diseño de Banana Group
 $html = '
-<html>
+<!DOCTYPE html>
+<html lang="es">
 <head>
+    <meta charset="UTF-8">
     <style>
-        body { font-family: sans-serif; color: #333; }
-        .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #fdd835; padding-bottom: 20px; }
-        .logo { font-size: 24px; font-weight: bold; color: #000; }
-        .titulo { font-size: 18px; color: #555; margin-top: 10px; }
+        body { font-family: sans-serif; color: #333; margin: 0; padding: 0; }
         
-        .info-box { width: 100%; margin-bottom: 30px; }
-        .info-box td { vertical-align: top; width: 50%; }
+        /* Encabezado Amarillo Institucional */
+        .header-bg {
+            background-color: #fff2a8; /* Color Banana */
+            padding: 30px;
+            border-bottom: 4px solid #fdd835; /* Borde más oscuro */
+        }
         
-        .detalles { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
-        .detalles th { background: #f8f9fa; padding: 10px; text-align: left; border-bottom: 1px solid #ddd; }
-        .detalles td { padding: 10px; border-bottom: 1px solid #eee; }
+        .header-table { width: 100%; }
+        .logo-img { max-height: 60px; }
         
-        .total-box { text-align: right; margin-top: 20px; }
-        .total-label { font-size: 14px; color: #777; }
-        .total-amount { font-size: 24px; font-weight: bold; color: #000; }
+        .title { text-align: right; font-size: 22px; font-weight: bold; color: #444; text-transform: uppercase; }
+        .subtitle { text-align: right; font-size: 12px; color: #666; margin-top: 5px; }
+
+        .info-section { margin: 30px; }
+        .info-table { width: 100%; }
+        .info-table td { vertical-align: top; width: 50%; }
         
-        .footer { position: fixed; bottom: 0; left: 0; right: 0; text-align: center; font-size: 10px; color: #aaa; border-top: 1px solid #eee; padding-top: 10px; }
+        .label { font-size: 10px; text-transform: uppercase; color: #888; font-weight: bold; margin-bottom: 3px; }
+        .value { font-size: 14px; color: #000; margin-bottom: 15px; }
+
+        /* Tabla de Conceptos (Desglose) */
+        .items-table { width: 100%; border-collapse: collapse; margin: 20px 30px; width: calc(100% - 60px); }
+        .items-table th { background: #f8f9fa; padding: 10px; text-align: left; font-size: 11px; border-bottom: 2px solid #ddd; color: #555; text-transform: uppercase; }
+        .items-table td { padding: 10px; border-bottom: 1px solid #eee; font-size: 13px; }
+        .items-table .amount { text-align: right; font-weight: bold; }
+
+        .total-section { text-align: right; margin: 30px; border-top: 2px solid #fdd835; padding-top: 15px; }
+        .total-lbl { font-size: 14px; color: #666; margin-right: 15px; }
+        .total-val { font-size: 24px; font-weight: bold; color: #000; }
+
+        .footer {
+            position: fixed; bottom: 0; left: 0; right: 0;
+            background: #f9f9f9; padding: 15px; text-align: center;
+            font-size: 10px; color: #999; border-top: 1px solid #eee;
+        }
     </style>
 </head>
 <body>
-    <div class="header">
-        <div class="logo">BANANA GROUP</div>
-        <div class="titulo">Comprobante de Pago</div>
+
+    <div class="header-bg">
+        <table class="header-table">
+            <tr>
+                <td>
+                    ' . ($logoBase64 ? '<img src="' . $logoBase64 . '" class="logo-img">' : '<h2>BANANA GROUP</h2>') . '
+                </td>
+                <td class="title">
+                    Recibo de Pago<br>
+                    <div class="subtitle">Folio: #' . $folio . '</div>
+                </td>
+            </tr>
+        </table>
     </div>
 
-    <table class="info-box">
-        <tr>
-            <td>
-                <strong>De:</strong><br>
-                Banana Group<br>
-                contacto@bananagroup.mx
-            </td>
-            <td style="text-align: right;">
-                <strong>Recibido de:</strong><br>
-                ' . htmlspecialchars($datos['empresa']) . '<br>
-                ' . htmlspecialchars($datos['correo']) . '<br>
-                <br>
-                <strong>Folio Pago:</strong> #' . $folio . '<br>
-                <strong>Fecha:</strong> ' . $fecha . '
-            </td>
-        </tr>
-    </table>
+    <div class="info-section">
+        <table class="info-table">
+            <tr>
+                <td>
+                    <div class="label">EMISOR</div>
+                    <div class="value">
+                        <strong>Banana Group Marketing</strong><br>
+                        Soluciones Digitales<br>
+                        contacto@bananagroup.mx
+                    </div>
+                </td>
+                <td>
+                    <div class="label">CLIENTE</div>
+                    <div class="value">
+                        <strong>' . htmlspecialchars($datos['empresa']) . '</strong><br>
+                        ' . htmlspecialchars($datos['correo']) . '<br>
+                        ' . htmlspecialchars($datos['telefono'] ?? '') . '
+                    </div>
+                </td>
+            </tr>
+            <tr>
+                <td>
+                    <div class="label">FECHA DE PAGO</div>
+                    <div class="value">' . $fecha . '</div>
+                </td>
+                <td>
+                    <div class="label">MÉTODO / REFERENCIA</div>
+                    <div class="value">
+                        ' . strtoupper($datos['metodo']) . '<br>
+                        ' . htmlspecialchars($datos['referencia'] ?: 'Sin referencia') . '
+                    </div>
+                </td>
+            </tr>
+        </table>
+    </div>
 
-    <table class="detalles">
+    <table class="items-table">
         <thead>
             <tr>
-                <th>Concepto / Periodo</th>
-                <th>Método</th>
-                <th>Referencia</th>
-                <th style="text-align: right;">Importe</th>
+                <th>DESCRIPCIÓN</th>
+                <th style="text-align: right;">IMPORTE</th>
             </tr>
         </thead>
-        <tbody>
+        <tbody>';
+
+        // Lógica del desglose: Si hay items en el cargo, los listamos uno por uno
+        if (!empty($items)) {
+            foreach ($items as $it) {
+                $html .= '
+                <tr>
+                    <td>
+                        ' . htmlspecialchars($it['concepto']) . '
+                        <div style="font-size:10px; color:#888; margin-top:2px;">Periodo: ' . $periodoTxt . '</div>
+                    </td>
+                    <td class="amount">$' . number_format((float)$it['total'], 2) . '</td>
+                </tr>';
+            }
+        } else {
+            // Fallback para pagos antiguos sin detalle
+            $html .= '
             <tr>
-                <td>Servicios Digitales<br><small style="color:#777">' . $periodo . '</small></td>
-                <td>' . strtoupper($datos['metodo']) . '</td>
-                <td>' . ($datos['referencia'] ?: '—') . '</td>
-                <td style="text-align: right;">' . $monto . '</td>
-            </tr>
+                <td>Servicios Digitales (' . $periodoTxt . ')</td>
+                <td class="amount">$' . $montoTotal . '</td>
+            </tr>';
+        }
+
+$html .= '
         </tbody>
     </table>
 
-    <div class="total-box">
-        <span class="total-label">Total Pagado:</span><br>
-        <span class="total-amount">' . $monto . ' MXN</span>
+    <div class="total-section">
+        <span class="total-lbl">TOTAL PAGADO:</span>
+        <span class="total-val">$' . $montoTotal . ' MXN</span>
     </div>
 
     <div class="footer">
-        Este documento es un comprobante de pago interno y no sustituye a una factura fiscal.
-        <br>Generado automáticamente por el sistema Banana Group.
+        Este documento es un comprobante de pago interno y no sustituye a una factura fiscal (CFDI).<br>
+        Gracias por su preferencia.
     </div>
+
 </body>
 </html>';
 
-// 4. Generar PDF
+// 7. Generar y Descargar PDF
 $options = new Options();
-$options->set('isRemoteEnabled', true); // Para cargar imágenes si usas url
+$options->set('isRemoteEnabled', true); // Permitir imágenes
 $dompdf = new Dompdf($options);
 $dompdf->loadHtml($html);
 $dompdf->setPaper('A4', 'portrait');
 $dompdf->render();
 
-// 5. Descargar (Stream)
-$dompdf->stream("Recibo_Banana_Pago_{$folio}.pdf", ["Attachment" => true]);
+// Enviar al navegador con el nombre personalizado
+$dompdf->stream($nombreArchivo, ["Attachment" => true]);
