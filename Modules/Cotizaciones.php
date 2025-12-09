@@ -222,7 +222,13 @@ $qs = $_GET; unset($qs['p']);
                 <?php endif; ?>
                 <button class="btn btn-sm btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown">Más</button>
                 <ul class="dropdown-menu dropdown-menu-end">
-                  <li><a class="dropdown-item" href="#">Descargar PDF</a></li>
+                  <li>
+        <a class="dropdown-item" 
+           href="/Sistema-de-Saldos-y-Pagos-/Public/api/cotizacion_pdf.php?id=<?= $id ?>" 
+           target="_blank">
+          <i class="bi bi-file-earmark-pdf-fill text-danger me-2"></i>Descargar PDF
+        </a>
+      </li>
                 </ul>
               </div>
             </td>
@@ -366,7 +372,7 @@ $qs = $_GET; unset($qs['p']);
     <option value="">Cargando RFCs…</option>
   </select>
   <input type="hidden" name="rfc_id" id="aprRfcId" value="">
-  <div class="form-text">Selecciona el RFC de la empresa con el que se emitirá la factura.</div>
+  <div class="form-text">Selecciona el RFC de la empresa con el que se emitirán las factura.</div>
 </div>
 
 

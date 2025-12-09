@@ -152,7 +152,7 @@ $html = '
                     <div class="value">
                         <strong>Banana Group Marketing</strong><br>
                         Soluciones Digitales<br>
-                        contacto@bananagroup.mx
+                        info@bananagroup.mx
                     </div>
                 </td>
                 <td>

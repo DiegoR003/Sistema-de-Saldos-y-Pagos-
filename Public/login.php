@@ -74,7 +74,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
             $rolesIds = $u['roles_csv'] ? array_map('intval', explode(',', $u['roles_csv'])) : [];
             $_SESSION['user_roles'] = $rolesIds;
 
-            // ✅ NUEVO: Guardar el nombre del rol principal (para evitar consultas extra)
+            //  NUEVO: Guardar el nombre del rol principal (para evitar consultas extra)
             // Buscamos el nombre del primer rol que tenga
             if (!empty($rolesIds)) {
                 $stRol = $pdo->prepare("SELECT nombre FROM roles WHERE id = ? LIMIT 1");
@@ -100,7 +100,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Banana Group - Login </title>
+    <title>Portal Banana Group </title>
     <link rel="icon" href="assets/Banana.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>

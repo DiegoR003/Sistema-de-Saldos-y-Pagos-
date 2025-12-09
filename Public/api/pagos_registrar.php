@@ -191,7 +191,7 @@ try {
     } catch (Exception $e) {}
 
 
-    // ✅ B. Notificación al CLIENTE (NUEVO)
+    //  B. Notificación al CLIENTE (NUEVO)
     // Buscamos si hay un usuario asociado al correo del cliente
     try {
         $stUserCli = $pdo->prepare("SELECT id FROM usuarios WHERE correo = ? AND activo = 1 LIMIT 1");
@@ -272,7 +272,7 @@ try {
                 <div class="info-section">
                     <table class="info-table">
                         <tr>
-                            <td><div class="label">EMISOR</div><div class="value">Banana Group<br>contacto@bananagroup.mx</div></td>
+                            <td><div class="label">EMISOR</div><div class="value">Banana Group Marketing<br>info@bananagroup.mx</div></td>
                             <td><div class="label">CLIENTE</div><div class="value"><strong>' . htmlspecialchars($orden['empresa']) . '</strong><br>' . htmlspecialchars($orden['correo']) . '</div></td>
                         </tr>
                         <tr>
@@ -296,7 +296,8 @@ try {
                     <span style="font-size: 12px; color: #666; margin-right: 10px;">TOTAL PAGADO:</span>
                     <span class="total-val">$' . number_format($montoPago, 2) . ' MXN</span>
                 </div>
-                <div class="footer">Comprobante de pago interno. Generado automáticamente por Banana Group.</div>
+                <div class="footer">Este documento es un comprobante de pago interno y no sustituye a una factura fiscal (CFDI).<br>
+        Gracias por su preferencia.</div>
             </body>
             </html>';
 
