@@ -37,17 +37,21 @@ $itemsDb = $stI->fetchAll(PDO::FETCH_ASSOC);
 function getInfoServicio($grupo, $opcion) {
     $g = mb_strtolower(trim($grupo), 'UTF-8');
     $map = [
-        'cuenta' => ['t' => 'Cuota Fija', 'd' => 'Asignación de ejecutivo.'],
-        'publicaciones' => ['t' => 'Posts Semanales', 'd' => 'Publicación feed/stories.'],
-        'meta' => ['t' => 'Meta ADS', 'd' => 'Campaña semanal.'],
-        'reposteo' => ['t' => 'Community Manager', 'd' => 'Gestión redes y mapas.'],
-        'stories' => ['t' => 'Diseño Gráfico', 'd' => 'Diseños espejo y stories.'],
-        'fotos' => ['t' => 'Fotografía', 'd' => 'Sesión profesional.'],
-        'video' => ['t' => 'Video Reels', 'd' => 'Producción de video.'],
-        'ads' => ['t' => 'Google ADS', 'd' => 'Campañas SEM.'],
+        'cuenta' => ['t' => 'Cuota Fija', 'd' => 'Es tu enlace entre la agencia y tu empresa. Se encarga de crear y coordinar tu estrategia de marketing digital y atender todas tus dudas.'],
+        'publicaciones' => ['t' => 'Posts Semanales', 'd' => 'Se publica tanto en tu feed (muro) como en historias. Incluye Facebook e Instagram.'],
+        'meta' => ['t' => 'Meta ADS', 'd' => 'No incluye el presupuesto asignado a cada campaña. El pago de campañas de vacantes es ilimitado y no se cuenta para el límite'],
+        'reposteo' => ['t' => 'Community Manager', 'd' => 'Es la persona encargada de responder todos los mensajes y comentarios en un horario de 9am a 5pm lunes a viernes y sábados de 9am a 2pm, excepto
+dias festivos.'],
+        'stories' => ['t' => 'Diseño Gráfico', 'd' => 'Incluye el diseño del post y de las stories tanto de Facebook como de Instagram. También incluye adicionalmente cambios de perfil, portada e historias
+destacadas.'],
+        'fotos' => ['t' => 'Fotografía', 'd' => '1 sesión de máximo 2 horas de producción, 30 fotografías a entregar y 1 locación. Incluye uso de drone. Si contratas una cada 2 meses estarás obligado a
+quedarte 4 meses en vez de 3. No incluye modelos'],
+        'video' => ['t' => 'Video Reels', 'd' => 'Sesión de máximo 2 horas de producción, 4 reels en formato vertical u horizontal a entregar. Incluye uso de drone'],
+        'ads' => ['t' => 'Google ADS', 'd' => 'Hasta 2 campañas simultáneamente'],
         'email' => ['t' => 'Email Marketing', 'd' => 'Boletines mensuales.'],
-        'mkt'   => ['t' => 'Email Marketing', 'd' => 'Boletines mensuales.'], // FIX PARA MKT
-        'web' => ['t' => 'Sitio Web', 'd' => 'Desarrollo web.']
+        'mkt'   => ['t' => 'Email Marketing', 'd' => 'Incluye el diseño y envío masivo de correo. No incluye base de datos'], // FIX PARA MKT
+        'web' => ['t' => 'Sitio Web', 'd' => 'Incluye hospedaje, dominio .com, certificado SSL, correos ilimitados en cantidad. Incluye soporte en horario laboral. Debes contratar un Sistema solo si
+requieres bases de datos o venta en línea.']
     ];
     foreach ($map as $k => $v) { if (strpos($g, $k) !== false) return $v; }
     return ['t' => mb_strtoupper($grupo), 'd' => $opcion];

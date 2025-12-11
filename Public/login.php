@@ -105,6 +105,18 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@300;400;600;700&display=swap" rel="stylesheet">
+
+     <!-- Fuentes -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@300;400;600;700&display=swap" rel="stylesheet">
+
+    <link
+        href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
+        rel="stylesheet"
+        integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH"
+        crossorigin="anonymous"
+    >
 </head>
 <style>
     
@@ -231,7 +243,7 @@ body {
   transition: filter .2s ease, transform .02s ease-in;
 }
 
-.btn:hover { filter: brightness(1.05); }
+.btn:hover { filter: brightness(1.05); background: #fff2a8; }
 .btn:active { transform: translateY(1px); }
 
 /* A11y */
@@ -405,6 +417,22 @@ body { background:#fffbee; }
   .page{ padding: 250px 16px;   }
 }
 
+/* Estilo para el link de "Olvidé mi contraseña" */
+.forgot-password-link {
+    color: #6c757d;
+    font-size: 0.9rem;
+    text-decoration: none;
+    transition: all 0.3s ease;
+    display: inline-block;
+    padding: 5px 10px;
+}
+
+.forgot-password-link:hover {
+    color: #fdd835; /* Amarillo Banana */
+    transform: translateY(-2px); /* Pequeño efecto de elevación */
+    text-decoration: underline;
+}
+
    </style>
 <body>
 
@@ -449,12 +477,19 @@ body { background:#fffbee; }
             </svg>
           </span>
         </label>
+
+        <div class="text-center">
+    <a href="#" class="text-muted small text-decoration-none" data-bs-toggle="modal" data-bs-target="#modalRecuperar">
+        ¿Olvidaste tu contraseña?
+    </a>
+</div>
         
         <button  class="btn" type="submit">Iniciar Sesion</button>
       </form>
     </section>
   </main>
-     
+
+  
   <div class="banana">
     <img src="./assets/Banana.png" alt="">
   </div>
@@ -494,6 +529,160 @@ body { background:#fffbee; }
 <!-- Tu burbuja -->
 <img src="./assets/burbuja.png" alt="Burbuja" class="bubble">
 
+
+<div class="modal fade" id="modalRecuperar" tabindex="-1" data-bs-backdrop="static" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content border-0 shadow-lg" style="border-radius: 15px; overflow: hidden;">
+      
+      <div class="modal-header border-0" style="background-color: #fdd835;">
+        <h5 class="modal-title fw-bold text-dark"><i class="bi bi-shield-lock-fill me-2"></i>Recuperar Acceso</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+
+      <div class="modal-body p-4">
+        <div id="step1">
+            <p class="text-muted text-center mb-4">Ingresa tu correo electrónico registrado. Te enviaremos un código de seguridad.</p>
+            <form id="formSendCode">
+                <div class="form-floating mb-3">
+                    <input type="email" class="form-control" id="recupEmail" required placeholder="name@example.com">
+                    <label for="recupEmail">Correo Electrónico</label>
+                </div>
+                <div class="d-grid">
+                    <button type="submit" class="btn btn-dark btn-lg" id="btnSendCode">
+                        Enviar Código <i class="bi bi-arrow-right ms-2"></i>
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <div id="step2" class="d-none">
+            <div class="alert alert-success small py-2 d-flex align-items-center">
+                <i class="bi bi-check-circle-fill me-2 fs-5"></i> 
+                <div>Código enviado. Revisa tu bandeja.</div>
+            </div>
+            
+            <form id="formResetFinal">
+                <input type="hidden" id="finalEmail">
+                
+                <div class="mb-3 text-center">
+                    <label class="form-label fw-bold small text-uppercase text-muted">Código de 6 dígitos</label>
+                    <input type="text" class="form-control text-center fw-bold fs-4" id="recupCode" required 
+                           placeholder="000000" maxlength="6" style="letter-spacing: 8px;">
+                </div>
+                
+                <div class="row g-2 mb-3">
+                    <div class="col-6">
+                        <label class="form-label small fw-bold">Nueva Contraseña</label>
+                        <input type="password" class="form-control" id="newPass" required minlength="6" placeholder="******">
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label small fw-bold">Confirmar</label>
+                        <input type="password" class="form-control" id="confPass" required minlength="6" placeholder="******">
+                    </div>
+                </div>
+
+                <div class="d-grid gap-2">
+                    <button type="submit" class="btn btn-warning fw-bold">Actualizar Contraseña</button>
+                    <button type="button" class="btn btn-link btn-sm text-muted text-decoration-none" onclick="volverPaso1()">
+                        <i class="bi bi-arrow-left"></i> Correo equivocado
+                    </button>
+                </div>
+            </form>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+<script>
+// 1. Enviar Código
+document.getElementById('formSendCode')?.addEventListener('submit', async function(e) {
+    e.preventDefault();
+    const btn = document.getElementById('btnSendCode');
+    const email = document.getElementById('recupEmail').value;
+    
+    const originalText = btn.innerHTML;
+    btn.disabled = true; btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Enviando...';
+
+    let fd = new FormData();
+    fd.append('email', email);
+
+    try {
+        const res = await fetch('api/auth_forgot_code.php', { method: 'POST', body: fd });
+        const data = await res.json();
+
+        if (data.ok) {
+            document.getElementById('finalEmail').value = email;
+            document.getElementById('step1').classList.add('d-none');
+            document.getElementById('step2').classList.remove('d-none');
+        } else {
+            Swal.fire('Error', data.msg || 'No se pudo enviar el correo', 'error');
+        }
+    } catch (err) {
+        Swal.fire('Error', 'Error de conexión con el servidor', 'error');
+    }
+    btn.disabled = false; btn.innerHTML = originalText;
+});
+
+// 2. Confirmar Cambio
+document.getElementById('formResetFinal')?.addEventListener('submit', async function(e) {
+    e.preventDefault();
+    const email = document.getElementById('finalEmail').value;
+    const code = document.getElementById('recupCode').value;
+    const p1 = document.getElementById('newPass').value;
+    const p2 = document.getElementById('confPass').value;
+
+    if (p1 !== p2) {
+        Swal.fire('Atención', 'Las contraseñas no coinciden', 'warning');
+        return;
+    }
+
+    let fd = new FormData();
+    fd.append('email', email);
+    fd.append('code', code);
+    fd.append('password', p1);
+
+    try {
+        const res = await fetch('api/auth_reset_final.php', { method: 'POST', body: fd });
+        const data = await res.json();
+
+        if (data.ok) {
+            // Cerrar modal y mostrar éxito
+            const modalEl = document.getElementById('modalRecuperar');
+            const modal = bootstrap.Modal.getInstance(modalEl);
+            modal.hide();
+            
+            Swal.fire({
+                icon: 'success',
+                title: '¡Contraseña Actualizada!',
+                text: 'Ya puedes iniciar sesión con tu nueva clave.',
+                confirmButtonColor: '#fdd835',
+                confirmButtonText: 'Entendido'
+            });
+            
+            // Limpiar formulario
+            document.getElementById('formResetFinal').reset();
+            volverPaso1();
+        } else {
+            Swal.fire('Error', data.msg || 'Código inválido', 'error');
+        }
+    } catch (err) {
+        Swal.fire('Error', 'Error de conexión', 'error');
+    }
+});
+
+function volverPaso1() {
+    document.getElementById('step1').classList.remove('d-none');
+    document.getElementById('step2').classList.add('d-none');
+}
+</script>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
 <script>
   const bubble = document.querySelector(".bubble");
 
@@ -519,6 +708,89 @@ body { background:#fffbee; }
   }
 
   move();
+</script>
+
+<script>
+// 1. Enviar Código
+document.getElementById('formSendCode')?.addEventListener('submit', async function(e) {
+    e.preventDefault();
+    const btn = document.getElementById('btnSendCode');
+    const email = document.getElementById('recupEmail').value;
+    
+    const originalText = btn.innerHTML;
+    btn.disabled = true; btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Enviando...';
+
+    let fd = new FormData();
+    fd.append('email', email);
+
+    try {
+        const res = await fetch('api/auth_forgot_code.php', { method: 'POST', body: fd });
+        const data = await res.json();
+
+        if (data.ok) {
+            document.getElementById('finalEmail').value = email;
+            document.getElementById('step1').classList.add('d-none');
+            document.getElementById('step2').classList.remove('d-none');
+        } else {
+            Swal.fire('Error', data.msg || 'No se pudo enviar el correo', 'error');
+        }
+    } catch (err) {
+        Swal.fire('Error', 'Error de conexión con el servidor', 'error');
+    }
+    btn.disabled = false; btn.innerHTML = originalText;
+});
+
+// 2. Confirmar Cambio
+document.getElementById('formResetFinal')?.addEventListener('submit', async function(e) {
+    e.preventDefault();
+    const email = document.getElementById('finalEmail').value;
+    const code = document.getElementById('recupCode').value;
+    const p1 = document.getElementById('newPass').value;
+    const p2 = document.getElementById('confPass').value;
+
+    if (p1 !== p2) {
+        Swal.fire('Atención', 'Las contraseñas no coinciden', 'warning');
+        return;
+    }
+
+    let fd = new FormData();
+    fd.append('email', email);
+    fd.append('code', code);
+    fd.append('password', p1);
+
+    try {
+        const res = await fetch('api/auth_reset_final.php', { method: 'POST', body: fd });
+        const data = await res.json();
+
+        if (data.ok) {
+            // Cerrar modal y mostrar éxito
+            const modalEl = document.getElementById('modalRecuperar');
+            const modal = bootstrap.Modal.getInstance(modalEl);
+            modal.hide();
+            
+            Swal.fire({
+                icon: 'success',
+                title: '¡Contraseña Actualizada!',
+                text: 'Ya puedes iniciar sesión con tu nueva clave.',
+                confirmButtonColor: '#fdd835',
+                confirmButtonText: 'Entendido'
+            });
+            
+            // Limpiar formulario
+            document.getElementById('formResetFinal').reset();
+            volverPaso1();
+        } else {
+            Swal.fire('Error', data.msg || 'Código inválido', 'error');
+        }
+    } catch (err) {
+        Swal.fire('Error', 'Error de conexión', 'error');
+    }
+});
+
+function volverPaso1() {
+    document.getElementById('step1').classList.remove('d-none');
+    document.getElementById('step2').classList.add('d-none');
+}
 </script>
 
 </body>
