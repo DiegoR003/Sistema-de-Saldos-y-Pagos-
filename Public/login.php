@@ -478,10 +478,14 @@ body { background:#fffbee; }
           </span>
         </label>
 
-        <div class="text-center">
-    <a href="#" class="text-muted small text-decoration-none" data-bs-toggle="modal" data-bs-target="#modalRecuperar">
-        ¿Olvidaste tu contraseña?
+       <div class="text-center mt-3">
+    <a href="#" class="text-decoration-none small text-muted link-hover" data-bs-toggle="modal" data-bs-target="#modalRecuperar">
+        <i class="bi bi-key"></i> ¿Olvidaste tu contraseña?
     </a>
+    <style>
+        .link-hover { transition: 0.3s; }
+        .link-hover:hover { color: #f9af24 !important; text-decoration: underline !important; cursor: pointer; }
+    </style>
 </div>
         
         <button  class="btn" type="submit">Iniciar Sesion</button>
@@ -711,14 +715,20 @@ function volverPaso1() {
 </script>
 
 <script>
-// 1. Enviar Código
+// 1. Enviar Código (Con protección anti-doble click)
 document.getElementById('formSendCode')?.addEventListener('submit', async function(e) {
     e.preventDefault();
     const btn = document.getElementById('btnSendCode');
-    const email = document.getElementById('recupEmail').value;
     
-    const originalText = btn.innerHTML;
-    btn.disabled = true; btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Enviando...';
+    // Si ya está deshabilitado, no hacemos nada
+    if (btn.disabled) return;
+
+    const email = document.getElementById('recupEmail').value;
+    const originalText = btn.innerText;
+    
+    // Bloquear botón inmediatamente
+    btn.disabled = true; 
+    btn.innerText = 'Enviando...';
 
     let fd = new FormData();
     fd.append('email', email);
@@ -729,15 +739,22 @@ document.getElementById('formSendCode')?.addEventListener('submit', async functi
 
         if (data.ok) {
             document.getElementById('finalEmail').value = email;
-            document.getElementById('step1').classList.add('d-none');
+            // Ocultar paso 1 y mostrar paso 2
+            document.getElementById('step1').style.display = 'none'; 
             document.getElementById('step2').classList.remove('d-none');
+            document.getElementById('step2').style.display = 'block';
         } else {
-            Swal.fire('Error', data.msg || 'No se pudo enviar el correo', 'error');
+            Swal.fire('Error', data.msg || 'Error desconocido', 'error');
+            // Solo rehabilitar si hubo error
+            btn.disabled = false; 
+            btn.innerText = originalText;
         }
     } catch (err) {
-        Swal.fire('Error', 'Error de conexión con el servidor', 'error');
+        console.error(err);
+        Swal.fire('Error', 'Error de conexión', 'error');
+        btn.disabled = false; 
+        btn.innerText = originalText;
     }
-    btn.disabled = false; btn.innerHTML = originalText;
 });
 
 // 2. Confirmar Cambio
@@ -763,24 +780,25 @@ document.getElementById('formResetFinal')?.addEventListener('submit', async func
         const data = await res.json();
 
         if (data.ok) {
-            // Cerrar modal y mostrar éxito
+            // Cerrar modal
             const modalEl = document.getElementById('modalRecuperar');
             const modal = bootstrap.Modal.getInstance(modalEl);
-            modal.hide();
-            
+            if(modal) modal.hide();
+
+            // Mensaje éxito + Recarga
             Swal.fire({
                 icon: 'success',
-                title: '¡Contraseña Actualizada!',
-                text: 'Ya puedes iniciar sesión con tu nueva clave.',
-                confirmButtonColor: '#fdd835',
-                confirmButtonText: 'Entendido'
+                title: '¡Éxito!',
+                text: 'Contraseña actualizada correctamente.',
+                confirmButtonColor: '#f9af24',
+                confirmButtonText: 'Iniciar Sesión',
+                allowOutsideClick: false
+            }).then((result) => {
+                window.location.href = 'login.php'; 
             });
             
-            // Limpiar formulario
-            document.getElementById('formResetFinal').reset();
-            volverPaso1();
         } else {
-            Swal.fire('Error', data.msg || 'Código inválido', 'error');
+            Swal.fire('Error', data.msg, 'error');
         }
     } catch (err) {
         Swal.fire('Error', 'Error de conexión', 'error');
@@ -788,8 +806,14 @@ document.getElementById('formResetFinal')?.addEventListener('submit', async func
 });
 
 function volverPaso1() {
-    document.getElementById('step1').classList.remove('d-none');
     document.getElementById('step2').classList.add('d-none');
+    document.getElementById('step2').style.display = 'none';
+    document.getElementById('step1').style.display = 'block';
+    
+    // Rehabilitar botón paso 1
+    const btn = document.getElementById('btnSendCode');
+    btn.disabled = false;
+    btn.innerText = 'Enviar Código';
 }
 </script>
 
