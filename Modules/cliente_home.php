@@ -31,6 +31,13 @@ $sqlSaldo = "
 $stSaldo = $pdo->prepare($sqlSaldo);
 $stSaldo->execute([$cliente['id']]);
 $saldo = (float)$stSaldo->fetchColumn();
+
+// 3. Contar notificaciones pendientes del cliente
+$sqlNotif = "SELECT COUNT(*) FROM notificaciones 
+             WHERE tipo = 'externa' AND cliente_id = ? AND estado = 'pendiente' AND leida_en IS NULL";
+$stNotif = $pdo->prepare($sqlNotif);
+$stNotif->execute([$cliente['id']]);
+$notifPendientes = (int)$stNotif->fetchColumn();
 ?>
 
 <div class="container py-5">
@@ -75,18 +82,22 @@ $saldo = (float)$stSaldo->fetchColumn();
                         <i class="bi bi-arrow-clockwise"></i> Actualización en tiempo real
                     </div>
                     
-                    <!-- Debug Info (Comentar en producción) -->
+                    <!-- Debug Info -->
                     <div class="mt-3 text-start small text-muted" id="debugInfo" style="background:#f8f9fa; padding:10px; border-radius:5px; display:none;">
                         <strong>🔧 Debug Info:</strong>
                         <div>Cliente ID: <code><?= $cliente['id'] ?></code></div>
                         <div>Pusher Key: <code><?= substr(PUSHER_APP_KEY ?? '', 0, 10) ?>...</code></div>
                         <div>Canal Saldo: <code>cliente_<?= $cliente['id'] ?></code></div>
                         <div>Canal Notif: <code>notificaciones_cliente_<?= $cliente['id'] ?></code></div>
-                        <div id="pusherStatus">Estado: Conectando...</div>
+                        <div>Notificaciones Pendientes (BD): <code><?= $notifPendientes ?></code></div>
+                        <div id="pusherStatus">Estado Pusher: <span class="text-warning">Conectando...</span></div>
                         <div id="lastEvent">Último evento: -</div>
+                        <div id="eventLog" style="max-height: 150px; overflow-y: auto; background: white; padding: 5px; margin-top: 5px; border-radius: 3px;">
+                            <small class="text-muted">Log de eventos...</small>
+                        </div>
                     </div>
-                    <button class="btn btn-sm btn-outline-secondary mt-2" onclick="document.getElementById('debugInfo').style.display = document.getElementById('debugInfo').style.display === 'none' ? 'block' : 'none'">
-                        Toggle Debug
+                    <button class="btn btn-sm btn-outline-secondary mt-2" onclick="toggleDebug()">
+                        🔍 Toggle Debug
                     </button>
                 </div>
             </div>
@@ -95,111 +106,167 @@ $saldo = (float)$stSaldo->fetchColumn();
 </div>
 
 <script src="https://js.pusher.com/8.2.0/pusher.min.js"></script>
+
 <script>
+// Función para toggle debug
+function toggleDebug() {
+    const debugDiv = document.getElementById('debugInfo');
+    debugDiv.style.display = debugDiv.style.display === 'none' ? 'block' : 'none';
+}
+
+// Función para agregar log
+function addLog(msg, tipo = 'info') {
+    const logDiv = document.getElementById('eventLog');
+    if (!logDiv) return;
+    
+    const colors = {
+        info: '#0d6efd',
+        success: '#198754',
+        warning: '#ffc107',
+        error: '#dc3545'
+    };
+    
+    const timestamp = new Date().toLocaleTimeString('es-MX');
+    const entry = document.createElement('div');
+    entry.style.color = colors[tipo] || colors.info;
+    entry.style.fontSize = '0.75rem';
+    entry.innerHTML = `[${timestamp}] ${msg}`;
+    logDiv.appendChild(entry);
+    
+    // Auto-scroll
+    logDiv.scrollTop = logDiv.scrollHeight;
+    
+    console.log(`[${tipo.toUpperCase()}] ${msg}`);
+}
+
 document.addEventListener("DOMContentLoaded", function() {
     
-    // --- DIAGNÓSTICO DE ELEMENTOS ---
-    const elSaldo = document.getElementById('saldoDisplay');
-    const elBadge = document.getElementById('notifCountBadge');
+    addLog('🚀 Iniciando sistema de notificaciones para cliente...', 'info');
     
-    if(!elSaldo) console.error("❌ ERROR HTML: No encuentro el elemento id='saldoDisplay'. El saldo no se actualizará.");
-    if(!elBadge) console.error("❌ ERROR HTML: No encuentro el elemento id='notifCountBadge'. La campanita no funcionará.");
+    // 1. CONFIGURACIÓN
+    if (typeof window.PUSHER_CONFIG === 'undefined' || !window.PUSHER_CONFIG.key) {
+        console.warn("⚠️ Pusher no configurado en el header.");
+        addLog('❌ Pusher no configurado', 'error');
+        return;
+    }
 
-    // --- CONFIGURACIÓN ---
-    const KEY = "<?= defined('PUSHER_APP_KEY') ? PUSHER_APP_KEY : '' ?>";
-    const CLUSTER = "<?= defined('PUSHER_APP_CLUSTER') ? PUSHER_APP_CLUSTER : '' ?>";
-    const ID = <?= isset($cliente['id']) ? (int)$cliente['id'] : 0 ?>;
+    const CLIENTE_ID = <?= isset($cliente['id']) ? (int)$cliente['id'] : 0 ?>;
+    if (CLIENTE_ID === 0) {
+        addLog('❌ Cliente ID no válido', 'error');
+        return;
+    }
 
-    if(!KEY || ID === 0) return;
+    addLog(`✅ Cliente ID: ${CLIENTE_ID}`, 'success');
 
-    // Conexión
-    // Pusher.logToConsole = true; // Actívalo si quieres ver todos los detalles técnicos
-    const pusher = new Pusher(KEY, { cluster: CLUSTER, forceTLS: true });
+    // 2. CONEXIÓN
+    const pusher = new Pusher(window.PUSHER_CONFIG.key, {
+        cluster: window.PUSHER_CONFIG.cluster,
+        forceTLS: true
+    });
+
+    // Eventos de conexión
+    pusher.connection.bind('connected', function() {
+        const statusEl = document.getElementById('pusherStatus');
+        if (statusEl) statusEl.innerHTML = 'Estado Pusher: <span class="text-success">✅ Conectado</span>';
+        addLog('✅ Pusher conectado exitosamente', 'success');
+    });
+
+    pusher.connection.bind('disconnected', function() {
+        const statusEl = document.getElementById('pusherStatus');
+        if (statusEl) statusEl.innerHTML = 'Estado Pusher: <span class="text-danger">❌ Desconectado</span>';
+        addLog('❌ Pusher desconectado', 'error');
+    });
+
+    pusher.connection.bind('error', function(err) {
+        addLog('❌ Error de Pusher: ' + JSON.stringify(err), 'error');
+    });
 
     // =========================================================
-    // CANAL 1: SALDO (Actualización en tiempo real)
+    // CANAL 1: SALDO (Actualización Visual Inmediata)
     // =========================================================
-    const chSaldo = pusher.subscribe('cliente_' + ID);
+    const chSaldo = pusher.subscribe('cliente_' + CLIENTE_ID);
+    
+    chSaldo.bind('pusher:subscription_succeeded', function() {
+        addLog('✅ Suscrito al canal de saldo', 'success');
+    });
+
+    chSaldo.bind('pusher:subscription_error', function(status) {
+        addLog('❌ Error al suscribirse al canal de saldo: ' + status, 'error');
+    });
     
     chSaldo.bind('actualizar-saldo', function(data) {
-        console.log("💰 RECIBIDO SALDO:", data);
+        addLog('💰 Evento de saldo recibido: $' + (data.nuevo_saldo || 'N/A'), 'success');
         
-        const display = document.getElementById('saldoDisplay');
-        const status = document.getElementById('saldoStatus');
-
-        if(display && data.nuevo_saldo !== undefined) {
-            const val = parseFloat(data.nuevo_saldo);
-            const fmt = new Intl.NumberFormat('es-MX', {style:'currency', currency:'MXN'}).format(val);
-            
-            // Efecto visual
-            display.style.opacity = '0';
-            setTimeout(() => {
-                display.innerText = fmt;
-                display.style.opacity = '1';
-                
-                // Actualizar colores y texto
-                if(val > 0.01) {
-                    display.className = 'display-3 fw-bold mb-3 text-danger';
-                    if(status) status.innerHTML = '<span class="badge bg-danger fs-6 px-3 py-2 rounded-pill"><i class="bi bi-exclamation-circle-fill"></i> Pago Pendiente</span>';
+        const lastEventEl = document.getElementById('lastEvent');
+        if (lastEventEl) lastEventEl.textContent = 'Último evento: actualizar-saldo - ' + new Date().toLocaleTimeString();
+        
+        if(data.nuevo_saldo !== undefined) {
+            const el = document.getElementById('saldoDisplay');
+            if(el) {
+                // Actualiza el número visualmente
+                el.innerText = new Intl.NumberFormat('es-MX', {style:'currency', currency:'MXN'}).format(data.nuevo_saldo);
+                if(parseFloat(data.nuevo_saldo) > 0.01) {
+                    el.className = 'display-3 fw-bold mb-3 text-danger';
                 } else {
-                    display.className = 'display-3 fw-bold mb-3 text-success';
-                    if(status) status.innerHTML = '<span class="badge bg-success fs-6 px-3 py-2 rounded-pill"><i class="bi bi-check-circle-fill"></i> Al corriente</span>';
+                    el.className = 'display-3 fw-bold mb-3 text-success';
                 }
-            }, 300);
+                addLog('✅ Saldo actualizado en la UI', 'success');
+            }
         }
     });
 
     // =========================================================
-    // CANAL 2: CAMPANITA (Notificaciones)
+    // CANAL 2: NOTIFICACIONES (Sonido + Recarga Automática)
     // =========================================================
-    const chNotif = pusher.subscribe('notificaciones_cliente_' + ID);
+    const chNotif = pusher.subscribe('notificaciones_cliente_' + CLIENTE_ID);
     
-    chNotif.bind('nueva-notificacion', function(data) {
-        console.log("🔔 RECIBIDA NOTIFICACIÓN:", data);
-
-        // A) Reproducir Sonido
-        const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
-        audio.play().catch(() => console.log("Audio silenciado por navegador"));
-
-        // B) Buscar y actualizar Badge (Intento robusto)
-        let badge = document.getElementById('notifCountBadge');
-        
-        // Si no tiene ID, intentamos buscarlo por clase dentro del nav
-        if(!badge) {
-            const bells = document.querySelectorAll('.bi-bell');
-            bells.forEach(b => {
-                if(b.nextElementSibling && b.nextElementSibling.classList.contains('badge')) {
-                    badge = b.nextElementSibling;
-                }
-            });
-        }
-
-        if (badge) {
-            let num = parseInt(badge.innerText.trim()) || 0;
-            badge.innerText = num + 1;
-            badge.classList.remove('d-none');
-            
-            // Animación
-            badge.style.transition = 'transform 0.2s';
-            badge.style.transform = 'scale(1.5)';
-            setTimeout(() => badge.style.transform = 'scale(1)', 300);
-        } else {
-            console.warn("⚠️ Aún no encuentro el badge en el DOM. Revisa el HTML de tu header.");
-        }
-
-        // C) Mostrar Alerta Flotante
-        if (typeof Swal !== 'undefined') {
-            Swal.fire({
-                toast: true,
-                position: 'top-end',
-                showConfirmButton: false,
-                timer: 5000,
-                timerProgressBar: true,
-                icon: 'info',
-                title: data.titulo,
-                text: data.cuerpo
-            });
-        }
+    chNotif.bind('pusher:subscription_succeeded', function() {
+        addLog('✅ Suscrito al canal de notificaciones', 'success');
     });
+
+    chNotif.bind('pusher:subscription_error', function(status) {
+        addLog('❌ Error al suscribirse al canal de notificaciones: ' + status, 'error');
+    });
+
+    chNotif.bind('nueva-notificacion', function(data) {
+        addLog('📬 ¡Nueva notificación recibida!', 'warning');
+        addLog('Datos: ' + JSON.stringify(data), 'info');
+        
+        const lastEventEl = document.getElementById('lastEvent');
+        if (lastEventEl) lastEventEl.textContent = 'Último evento: nueva-notificacion - ' + new Date().toLocaleTimeString();
+
+        // A) Sonido
+        try { 
+            const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
+            audio.play().catch((err) => {
+                addLog('⚠️ No se pudo reproducir sonido: ' + err.message, 'warning');
+            });
+            addLog('🔊 Sonido reproducido', 'success');
+        } catch(e) {
+            addLog('❌ Error al reproducir sonido: ' + e.message, 'error');
+        }
+
+        // B) Actualizar Badge visualmente (Efecto inmediato)
+        const badge = document.getElementById('notifCountBadge');
+        if (badge) {
+            let n = parseInt(badge.innerText.replace(/[^0-9]/g, '') || '0');
+            badge.innerText = n + 1;
+            badge.classList.remove('d-none');
+            badge.style.visibility = 'visible';
+            addLog(`✅ Badge actualizado: ${n} → ${n + 1}`, 'success');
+        } else {
+            addLog('⚠️ No se encontró el elemento del badge', 'warning');
+        }
+
+        // C) RECARGAR PÁGINA (Para que el header.php traiga la notificación real de la BD)
+        addLog('⏳ Recargando página en 2 segundos...', 'info');
+        
+        setTimeout(() => {
+            addLog('🔄 Recargando ahora...', 'warning');
+            window.location.reload();
+        }, 2000); 
+    });
+
+    addLog('✅ Sistema de notificaciones inicializado', 'success');
 });
 </script>

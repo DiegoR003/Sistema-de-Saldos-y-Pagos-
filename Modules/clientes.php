@@ -174,7 +174,7 @@ function fmt_date(?string $d): string {
             <tr>
               <th>Cliente</th>
               <th>Correo</th>
-              <th>Teléfono</th>
+              <!--<th>Teléfono</th>-->
               <th>Servicio</th>
               <th>Periodo</th>
               <th>Próx. fact.</th>
@@ -194,7 +194,7 @@ function fmt_date(?string $d): string {
             <tr>
               <td><?= htmlspecialchars($r['empresa']) ?></td>
               <td><?= htmlspecialchars($r['correo']) ?></td>
-              <td><?= htmlspecialchars($r['telefono'] ?? '—') ?></td>
+              
               <td><?= $montoMensual > 0 ? 'Mensual ' . money_mx($montoConIVA) : '—' ?></td>
               <td><?= htmlspecialchars($periodoTxt) ?></td>
               <td><?= htmlspecialchars($proximaTxt) ?></td>

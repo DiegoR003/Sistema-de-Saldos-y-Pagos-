@@ -6,6 +6,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/../../App/bd.php';
 require_once __DIR__ . '/../../vendor/autoload.php'; // Dompdf
 require_once __DIR__ . '/../../App/notifications.php'; // Campanita
+require_once __DIR__ . '/../../App/pusher_config.php';
 
 // Cargar Mailer
 if (file_exists(__DIR__ . '/../../App/mailer.php')) {

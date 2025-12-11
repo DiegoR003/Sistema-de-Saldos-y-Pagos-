@@ -24,7 +24,7 @@ $clientes = $stCli->fetchAll(PDO::FETCH_ASSOC);
     PAGINACIÓN
    ========================= */
 $page   = max(1, (int)($_GET['p'] ?? 1));
-$limit  = 10;
+$limit  = 5;
 $offset = ($page - 1) * $limit;
 
 /* =========================

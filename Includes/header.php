@@ -16,20 +16,31 @@ require_once __DIR__ . '/../App/pusher_config.php';
 $pdo = db();
 $currentUser = current_user();
 
-if (!empty($currentUser['id'])) {
-    $usuarioId = (int)$currentUser['id'];
-} elseif (!empty($_SESSION['usuario_id'])) {
-    $usuarioId = (int)$_SESSION['usuario_id'];
+// 1. DETECTAR IDENTIDAD (Cliente o Admin)
+$esCliente = false;
+$usuarioId = 0;
+$clienteId = 0;
+$userName = 'Usuario';
+$usuarioRol = 'guest';
+$userInitial = 'U';
+$fotoUsuario = '';
+
+if (isset($_SESSION['cliente_id'])) {
+    $esCliente = true;
+    $clienteId = (int)$_SESSION['cliente_id'];
+    $usuarioRol = 'cliente';
+    // Si tienes el nombre del cliente en sesión, úsalo, si no, busca en BD
+    $userName = $_SESSION['nombre_cliente'] ?? 'Cliente'; 
 } else {
-    $usuarioId = 0;
+    $usuarioId = (int)($currentUser['id'] ?? $_SESSION['usuario_id'] ?? 0);
+    $usuarioRol = $currentUser['rol'] ?? $_SESSION['usuario_rol'] ?? 'guest';
+    $userName = $currentUser['nombre'] ?? 'Usuario';
 }
 
-$usuarioRol = $currentUser['rol'] ?? $_SESSION['usuario_rol'] ?? 'guest';
-$userName = $currentUser['nombre'] ?? 'Usuario';
 $userInitial = mb_substr($userName, 0, 1, 'UTF-8');
 
-$fotoUsuario = '';
-if ($usuarioId > 0) {
+// Foto solo para Staff
+if (!$esCliente && $usuarioId > 0) {
     $stUser = $pdo->prepare("SELECT nombre, foto_url FROM usuarios WHERE id = ? LIMIT 1");
     $stUser->execute([$usuarioId]);
     $datosFrescos = $stUser->fetch(PDO::FETCH_ASSOC);
@@ -44,7 +55,6 @@ if ($usuarioId > 0) {
 // -------------------------------------------------------------------
 $notificaciones = [];
 
-// Helper tiempo
 function tiempo_hace_es(?string $fecha): string {
     if (!$fecha) return '';
     $dt = new DateTime($fecha);
@@ -58,18 +68,30 @@ function tiempo_hace_es(?string $fecha): string {
     return 'hace un momento';
 }
 
-if ($usuarioId) {
-    $stList = $pdo->prepare("
-        SELECT id, titulo, cuerpo, creado_en, leida_en, estado
-        FROM notificaciones
-        WHERE tipo = 'interna'
-          AND (usuario_id = ? OR usuario_id IS NULL)
-        ORDER BY creado_en DESC
-        LIMIT 10
-    ");
-    $stList->execute([$usuarioId]);
-    $rows = $stList->fetchAll(PDO::FETCH_ASSOC);
+// LÓGICA DE CONSULTA SEGÚN ROL
+if ($esCliente && $clienteId > 0) {
+    // A) CLIENTE: Buscar tipo 'externa' y su cliente_id
+    $sql = "SELECT id, titulo, cuerpo, creado_en, leida_en, estado
+            FROM notificaciones
+            WHERE tipo = 'externa' AND cliente_id = ?
+            ORDER BY creado_en DESC LIMIT 10";
+    $stList = $pdo->prepare($sql);
+    $stList->execute([$clienteId]);
 
+} elseif ($usuarioId > 0) {
+    // B) ADMIN: Buscar tipo 'interna' y su usuario_id
+    $sql = "SELECT id, titulo, cuerpo, creado_en, leida_en, estado
+            FROM notificaciones
+            WHERE tipo = 'interna' AND (usuario_id = ? OR usuario_id IS NULL)
+            ORDER BY creado_en DESC LIMIT 10";
+    $stList = $pdo->prepare($sql);
+    $stList->execute([$usuarioId]);
+} else {
+    $stList = null;
+}
+
+if ($stList) {
+    $rows = $stList->fetchAll(PDO::FETCH_ASSOC);
     foreach ($rows as $r) {
         $notificaciones[] = [
             'id'    => (int)$r['id'],
@@ -78,9 +100,19 @@ if ($usuarioId) {
             'hace'  => tiempo_hace_es($r['creado_en']),
             'leida' => !empty($r['leida_en']),
             'pendiente' => ($r['estado'] === 'pendiente' && empty($r['leida_en'])),
+            'timestamp' => strtotime($r['creado_en']),
         ];
     }
 }
+
+// CALCULAR TOTAL NO LEÍDAS PARA EL BADGE
+$totalNoLeidas = 0;
+foreach($notificaciones as $n) {
+    if($n['pendiente']) $totalNoLeidas++;
+}
+
+// Pasar datos al JavaScript
+$notificacionesJSON = json_encode($notificaciones);
 ?>
 <!doctype html>
 <html lang="es">
@@ -97,19 +129,37 @@ if ($usuarioId) {
   <script>
   window.APP_USER = {
     id: <?php echo (int)($usuarioId ?? 0); ?>,
-    rol: "<?php echo htmlspecialchars($usuarioRol ?? 'guest'); ?>"
+    rol: "<?php echo htmlspecialchars($usuarioRol ?? 'guest'); ?>",
+    clienteId: <?php echo (int)($clienteId ?? 0); ?>,
+    esCliente: <?php echo $esCliente ? 'true' : 'false'; ?>
   };
   window.PUSHER_CONFIG = {
     key: "<?php echo defined('PUSHER_APP_KEY') ? PUSHER_APP_KEY : ''; ?>",
     cluster: "<?php echo defined('PUSHER_APP_CLUSTER') ? PUSHER_APP_CLUSTER : ''; ?>"
   };
   
+  // Notificaciones cargadas desde BD
+  window.NOTIFICACIONES_INICIALES = <?php echo $notificacionesJSON; ?>;
+  window.TOTAL_NO_LEIDAS = <?php echo $totalNoLeidas; ?>;
+  
   // Función para obtener notificaciones ocultas
   function getNotifOcultas() {
-    const userId = window.APP_USER.id;
+    const userId = window.APP_USER.id || window.APP_USER.clienteId;
     const key = 'notif_ocultas_' + userId;
     const stored = localStorage.getItem(key);
     return stored ? JSON.parse(stored) : [];
+  }
+
+  // Función para limpiar notificaciones antiguas ocultas (más de 7 días)
+  function limpiarNotifAntiguasOcultas() {
+    const userId = window.APP_USER.id || window.APP_USER.clienteId;
+    const key = 'notif_ocultas_' + userId;
+    const ocultas = getNotifOcultas();
+    const notifActuales = window.NOTIFICACIONES_INICIALES.map(n => n.id);
+    
+    // Filtrar solo las que aún existen en BD
+    const ocultasFiltradas = ocultas.filter(id => notifActuales.includes(id));
+    localStorage.setItem(key, JSON.stringify(ocultasFiltradas));
   }
   </script>
 </head>
@@ -165,15 +215,17 @@ if ($usuarioId) {
           <button class="btn btn-link position-relative p-0 border-0 text-dark" 
                   type="button" id="dropdownNotificaciones" data-bs-toggle="dropdown" aria-expanded="false">
             <i class="bi bi-bell fs-5"></i>
-            <!-- SIEMPRE OCULTO POR DEFECTO - JS lo mostrará si es necesario -->
-            <span id="notifCountBadge" class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger d-none" style="visibility: hidden;">
-                0
+            <!-- Badge dinámico -->
+            <span id="notifCountBadge" class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger <?= $totalNoLeidas > 0 ? '' : 'd-none' ?>" 
+                  style="visibility: <?= $totalNoLeidas > 0 ? 'visible' : 'hidden' ?>;">
+                <?= $totalNoLeidas ?>
             </span>
           </button>
 
           <ul class="dropdown-menu dropdown-menu-end shadow notif-menu" aria-labelledby="dropdownNotificaciones">
             <li class="px-3 py-2 border-bottom bg-light d-flex justify-content-between align-items-center">
               <span class="fw-bold small text-uppercase text-muted">Notificaciones</span>
+              <small class="text-muted" id="contadorNotif"><?= count($notificaciones) ?> total</small>
             </li>
 
             <div id="listaNotificaciones">
@@ -187,7 +239,8 @@ if ($usuarioId) {
                     <li class="notif-item px-3 py-2 border-bottom small <?= $n['leida'] ? 'bg-white' : 'bg-light' ?>" 
                         id="notif-<?= $n['id'] ?>" 
                         data-notif-id="<?= $n['id'] ?>"
-                        data-pendiente="<?= $n['pendiente'] ? '1' : '0' ?>">
+                        data-pendiente="<?= $n['pendiente'] ? '1' : '0' ?>"
+                        data-timestamp="<?= $n['timestamp'] ?>">
                         
                       <button class="btn-close-notif" onclick="ocultarNotif(event, <?= $n['id'] ?>)" title="Ocultar">
                           <i class="bi bi-x-lg"></i>
@@ -229,51 +282,31 @@ if ($usuarioId) {
 
  <script>
 // =====================================================
-// SISTEMA DE OCULTACIÓN LOCAL DE NOTIFICACIONES
+// SISTEMA DE NOTIFICACIONES - VERSIÓN OPTIMIZADA
 // =====================================================
+
+// Variables globales
+let notificacionesRecientes = new Set();
 
 // Guardar notificación oculta en localStorage
 function saveNotifOculta(notifId) {
-    const userId = window.APP_USER.id;
+    const userId = window.APP_USER.id || window.APP_USER.clienteId;
     const key = `notif_ocultas_${userId}`;
     let ocultas = getNotifOcultas();
     
     if (!ocultas.includes(notifId)) {
         ocultas.push(notifId);
         localStorage.setItem(key, JSON.stringify(ocultas));
+        console.log('✅ Notificación', notifId, 'guardada como oculta');
     }
-}
-
-// Filtrar notificaciones ocultas y actualizar contador
-function filtrarNotificacionesOcultas() {
-    const ocultas = getNotifOcultas();
-    let contadorVisible = 0;
-    
-    document.querySelectorAll('.notif-item').forEach(item => {
-        const notifId = parseInt(item.dataset.notifId);
-        const esPendiente = item.dataset.pendiente === '1';
-        
-        if (ocultas.includes(notifId)) {
-            item.classList.add('oculta');
-        } else {
-            // Contar las pendientes que NO están ocultas
-            if (esPendiente) {
-                contadorVisible++;
-            }
-        }
-    });
-    
-    // Actualizar el badge
-    actualizarBadge(contadorVisible);
-    
-    // Mostrar mensaje si no hay notificaciones visibles
-    verificarNotificacionesVisibles();
 }
 
 // Actualizar badge
 function actualizarBadge(count) {
     const badge = document.getElementById('notifCountBadge');
     if (!badge) return;
+    
+    console.log('🔢 Actualizando badge a:', count);
     
     if (count > 0) {
         badge.innerText = count;
@@ -289,6 +322,13 @@ function actualizarBadge(count) {
 function verificarNotificacionesVisibles() {
     const lista = document.getElementById('listaNotificaciones');
     const notifVisibles = document.querySelectorAll('.notif-item:not(.oculta)').length;
+    const contador = document.getElementById('contadorNotif');
+    
+    console.log('📊 Notificaciones visibles:', notifVisibles);
+    
+    if (contador) {
+        contador.textContent = notifVisibles + ' total';
+    }
     
     if (notifVisibles === 0) {
         lista.innerHTML = `
@@ -297,7 +337,44 @@ function verificarNotificacionesVisibles() {
             Sin novedades
           </li>
         `;
+    } else {
+        const noMsg = document.getElementById('noNotifMsg');
+        if (noMsg) noMsg.remove();
     }
+}
+
+// Filtrar notificaciones ocultas y actualizar contador
+function filtrarNotificacionesOcultas() {
+    console.log('🔍 Filtrando notificaciones ocultas...');
+    
+    const ocultas = getNotifOcultas();
+    const ahora = Math.floor(Date.now() / 1000);
+    let contadorVisible = 0;
+    
+    console.log('📋 IDs ocultas en localStorage:', ocultas);
+    
+    document.querySelectorAll('.notif-item').forEach(item => {
+        const notifId = parseInt(item.dataset.notifId);
+        const esPendiente = item.dataset.pendiente === '1';
+        const timestamp = parseInt(item.dataset.timestamp || 0);
+        const esReciente = (ahora - timestamp) < 10; // Menos de 10 segundos
+        
+        // NO OCULTAR si es una notificación que acaba de llegar
+        if (ocultas.includes(notifId) && !esReciente) {
+            item.classList.add('oculta');
+            console.log('👁️ Ocultando notificación ID:', notifId);
+        } else {
+            item.classList.remove('oculta');
+            if (esPendiente) {
+                contadorVisible++;
+            }
+        }
+    });
+    
+    console.log('✅ Contador de pendientes visibles:', contadorVisible);
+    
+    actualizarBadge(contadorVisible);
+    verificarNotificacionesVisibles();
 }
 
 // Función para ocultar notificación
@@ -305,69 +382,70 @@ function ocultarNotif(e, id) {
     e.stopPropagation();
     e.preventDefault();
 
+    console.log('❌ Ocultando notificación ID:', id);
+
     const item = document.getElementById('notif-' + id);
     if (!item) return;
     
-    // A) GUARDAR en localStorage
     saveNotifOculta(id);
     
-    // B) VISUAL: Desaparecer con animación
+    item.style.transition = 'all 0.2s ease';
     item.style.opacity = '0';
     item.style.transform = 'translateX(20px)';
     
     setTimeout(() => {
         item.classList.add('oculta');
-        
-        // Verificar si quedan notificaciones visibles
         verificarNotificacionesVisibles();
         
-        // Actualizar el contador
         const pendientesVisibles = document.querySelectorAll('.notif-item:not(.oculta)[data-pendiente="1"]').length;
         actualizarBadge(pendientesVisibles);
     }, 200);
 }
 
 // =====================================================
-// INICIALIZACIÓN INMEDIATA
+// INICIALIZACIÓN
 // =====================================================
 
-// Ejecutar filtrado INMEDIATAMENTE (antes de DOMContentLoaded)
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', filtrarNotificacionesOcultas);
-} else {
-    filtrarNotificacionesOcultas();
-}
-
-// Configurar eventos de la campanita
 document.addEventListener("DOMContentLoaded", function() {
+    console.log('🚀 Inicializando sistema de notificaciones...');
+    console.log('👤 Usuario:', window.APP_USER);
+    console.log('📬 Total notificaciones desde BD:', window.NOTIFICACIONES_INICIALES?.length || 0);
+    console.log('🔴 Total no leídas (PHP):', window.TOTAL_NO_LEIDAS);
+    
+    limpiarNotifAntiguasOcultas();
+    
+    setTimeout(() => {
+        filtrarNotificacionesOcultas();
+    }, 100);
+    
+    // =====================================================
+    // EVENTOS DE LA CAMPANITA
+    // =====================================================
     const bellBtn = document.getElementById('dropdownNotificaciones');
 
     if (bellBtn) {
         bellBtn.addEventListener('show.bs.dropdown', function () {
             const pendientesVisibles = document.querySelectorAll('.notif-item:not(.oculta)[data-pendiente="1"]').length;
             
-            console.log('Campanita abierta. Notificaciones pendientes visibles:', pendientesVisibles);
+            console.log('🔔 Campanita abierta. Pendientes visibles:', pendientesVisibles);
             
             if (pendientesVisibles > 0) {
-                // A) VISUAL: Ocultar contador
                 const badge = document.getElementById('notifCountBadge');
                 if (badge) {
                     badge.classList.add('d-none');
                     badge.style.visibility = 'hidden';
                 }
 
-                // B) VISUAL: Quitar color amarillo
                 document.querySelectorAll('.notif-item.bg-light:not(.oculta)').forEach(el => {
                     el.classList.remove('bg-light');
                     el.classList.add('bg-white');
                     el.dataset.pendiente = '0';
                 });
 
-                // C) BACKEND: Marcar como leídas en BD
                 const fd = new FormData();
                 fd.append('todas', 'true');
                 
-                console.log('Enviando petición para marcar como leídas...');
+                console.log('📤 Marcando notificaciones como leídas en BD...');
                 
                 fetch('/Sistema-de-Saldos-y-Pagos-/Public/api/notificaciones_leer.php', { 
                     method: 'POST', 
@@ -375,19 +453,19 @@ document.addEventListener("DOMContentLoaded", function() {
                 })
                 .then(response => response.json())
                 .then(data => {
-                    console.log('Respuesta del servidor:', data);
+                    console.log('✅ Respuesta del servidor:', data);
                 })
                 .catch(error => {
-                    console.error('Error al marcar notificaciones:', error);
+                    console.error('❌ Error al marcar notificaciones:', error);
                 });
             }
         });
     }
 });
 </script>
+
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   <script src="https://js.pusher.com/8.2.0/pusher.min.js"></script>
-
   <script src="/Sistema-de-Saldos-y-Pagos-/Public/js/notificaciones.js"></script>
 
 </body>
