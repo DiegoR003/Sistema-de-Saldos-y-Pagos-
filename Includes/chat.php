@@ -1,273 +1,463 @@
-<div id="chatWidget" class="chat-widget closed">
-    
-    <div class="chat-header" id="chatHeaderBtn">
-        <div class="d-flex align-items-center gap-2">
-            <i class="bi bi-chat-text-fill fs-5"></i>
-            <span class="fw-bold" id="chatTitle">Mensajes</span>
-        </div>
-        <div class="d-flex gap-2 align-items-center">
-            <button id="btnVolver" type="button" class="btn-icon d-none" title="Volver">
-                <i class="bi bi-arrow-left-circle-fill fs-5"></i>
-            </button>
-            <i class="bi bi-chevron-down toggle-icon"></i>
-        </div>
-    </div>
+<script src="https://js.pusher.com/8.2.0/pusher.min.js"></script>
 
-    <div class="chat-view-list" id="vistaLista">
-        <div class="p-2 bg-light border-bottom">
-            <input type="text" id="chatSearch" class="form-control form-control-sm rounded-pill" placeholder="Buscar un chat o iniciar uno nuevo">
-        </div>
-        <div id="listaContactos" class="list-group list-group-flush contact-list-scroll">
-            <div class="text-center p-4 text-muted small">Cargando clientes...</div>
-        </div>
-    </div>
+<div id="chatWidgetContainer">
 
-    <div class="chat-view-conv d-none" id="vistaChat">
-        <div id="chatMsgs" class="flex-grow-1 p-3 scroll-container bg-chat"></div>
+    <div id="chatBox" class="chat-box shadow-lg d-none">
         
-        <div class="p-2 bg-white border-top">
-            <form id="formEnviarChat" class="d-flex gap-2 w-100 m-0" autocomplete="off">
-                <input type="hidden" id="chatClienteId" name="cliente_id">
-                <input type="text" id="chatInputMsg" class="form-control rounded-pill bg-light border-0" placeholder="Escribe un mensaje..." required>
-                <button type="submit" class="btn btn-warning rounded-circle shadow-sm" style="width:40px; height:40px; padding:0;">
-                    <i class="bi bi-send-fill text-dark small"></i>
-                </button>
-            </form>
+        <div class="chat-head d-flex align-items-center justify-content-between">
+            <div class="d-flex align-items-center gap-2" id="chatBackInfo" style="cursor:pointer; overflow:hidden;">
+                <i class="bi bi-arrow-left text-dark d-none" id="chatBackBtn"></i>
+                <div class="position-relative">
+                    <div id="chatAvatar" class="chat-avatar">?</div>
+                    <span id="chatStatusDot" class="chat-dot offline"></span>
+                </div>
+                <div class="d-flex flex-column" style="line-height:1.1;">
+                    <span id="chatTitle" class="fw-bold text-dark text-truncate" style="font-size:0.95rem; max-width: 180px;">Mensajes</span>
+                    <span id="chatSubtitle" class="small text-muted" style="font-size:0.7rem;">Banana Group</span>
+                </div>
+            </div>
+            <button id="chatCloseBtn" class="btn btn-sm text-dark"><i class="bi bi-x-lg"></i></button>
+        </div>
+
+        <div id="chatViewList" class="chat-body d-flex flex-column">
+            <div class="p-2 border-bottom bg-light">
+                <input type="text" id="chatSearchInput" class="form-control form-control-sm rounded-pill border-0 shadow-sm" placeholder="Buscar chat...">
+            </div>
+            <div id="chatContactList" class="flex-grow-1 overflow-auto bg-white"></div>
+        </div>
+
+        <div id="chatViewConv" class="chat-body d-none flex-column h-100 position-relative">
+            <div class="chat-bg"></div>
+            
+            <div id="chatMsgArea" class="flex-grow-1 p-3 overflow-auto z-1"></div>
+
+            <div id="chatFilePreview" class="d-none p-2 bg-light border-top d-flex justify-content-between align-items-center small">
+                <span id="chatFileName" class="text-truncate" style="max-width:200px"></span>
+                <button type="button" class="btn-close btn-sm" onclick="chatClearFile()"></button>
+            </div>
+
+            <div class="p-2 bg-white border-top z-1">
+                <form id="chatForm" class="d-flex align-items-center gap-2 m-0" onsubmit="return false;">
+                    <input type="hidden" id="chatTargetId">
+                    
+                    <label class="btn btn-light btn-sm rounded-circle text-muted shadow-sm d-flex align-items-center justify-content-center" style="width:38px;height:38px; cursor:pointer; flex-shrink:0;">
+                        <i class="bi bi-paperclip fs-5"></i>
+                        <input type="file" id="chatFileIn" class="d-none">
+                    </label>
+
+                    <input type="text" id="chatTextIn" class="form-control form-control-sm rounded-pill bg-light border-0 shadow-sm" placeholder="Escribe..." style="height:38px;" autocomplete="off">
+                    
+                    <button type="submit" class="btn btn-warning btn-sm rounded-circle shadow-sm d-flex align-items-center justify-content-center" style="width:38px;height:38px; background-color:#fdd835; border:none; flex-shrink:0;">
+                        <i class="bi bi-send-fill text-dark"></i>
+                    </button>
+                </form>
+            </div>
         </div>
     </div>
+
+    <button id="chatFloatBtn" class="chat-float-btn shadow-lg">
+        <i class="bi bi-chat-dots-fill fs-4"></i>
+        <span id="chatUnreadBadge" class="position-absolute top-0 start-100 translate-middle p-1 bg-danger border border-light rounded-circle d-none"></span>
+    </button>
+
 </div>
 
 <style>
-    /* Widget Container */
-    .chat-widget {
-        position: fixed; bottom: 0; right: 20px;
-        width: 340px; height: 480px;
+    /* === CSS BLINDADO PARA EVITAR ESTIRAMIENTO === */
+    
+    #chatWidgetContainer {
+        position: fixed !important;
+        bottom: 25px !important;
+        right: 25px !important;
+        z-index: 2147483647 !important; /* Encima de todo */
+        
+        /* Forzamos que el contenedor NO ocupe toda la pantalla */
+        width: auto !important; 
+        height: auto !important;
+        left: auto !important;
+        top: auto !important;
+        
+        /* Organización interna */
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end; /* Alinea hijos a la derecha */
+        gap: 15px; /* Espacio entre ventana y botón */
+    }
+
+    /* BOTÓN FLOTANTE */
+    .chat-float-btn {
+        width: 60px !important;
+        height: 60px !important;
+        border-radius: 50% !important;
+        background-color: #fdd835 !important;
+        color: #333 !important;
+        border: none !important;
+        cursor: pointer !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.3) !important;
+        transition: transform 0.2s ease;
+        padding: 0 !important;
+    }
+    .chat-float-btn:hover { transform: scale(1.1); }
+
+    /* VENTANA DEL CHAT */
+    .chat-box {
+        /* Dimensiones fijas estrictas */
+        width: 350px !important;
+        height: 500px !important;
+        
+        /* Asegurar que no se salga en móviles */
+        max-width: 90vw !important;
+        max-height: 80vh !important;
+        
+        background: #fff !important;
+        border-radius: 16px !important;
+        overflow: hidden !important;
+        display: flex !important;
+        flex-direction: column !important;
+        box-shadow: 0 10px 40px rgba(0,0,0,0.2) !important;
+        border: 1px solid rgba(0,0,0,0.1) !important;
+    }
+
+    /* CABECERA */
+    .chat-head {
+        background: #fdd835 !important;
+        height: 60px !important;
+        min-height: 60px !important;
+        padding: 0 15px;
+        flex-shrink: 0;
+    }
+
+    .chat-avatar {
+        width: 38px; height: 38px;
+        background: #fff; color: #333;
+        border-radius: 50%;
+        display: flex; align-items: center; justify-content: center;
+        font-weight: bold; font-size: 0.9rem;
+        margin-right: 10px;
+    }
+
+    .chat-dot {
+        position: absolute; bottom: 0; right: 8px;
+        width: 10px; height: 10px;
+        border-radius: 50%;
+        border: 2px solid #fdd835;
+    }
+    .chat-dot.online { background-color: #25D366; }
+    .chat-dot.offline { background-color: #ccc; }
+
+    /* CUERPO */
+    .chat-body { flex: 1; display: flex; flex-direction: column; overflow: hidden; position: relative; }
+    
+    .chat-bg {
+        position: absolute; inset: 0; 
+        background-color: #e5ddd5;
+        opacity: 0.1; pointer-events: none; z-index: 0;
+    }
+
+    /* ITEMS LISTA */
+    .chat-item {
+        padding: 12px 15px;
+        border-bottom: 1px solid #f5f5f5;
+        cursor: pointer;
+        display: flex; align-items: center;
         background: #fff;
-        border-radius: 12px 12px 0 0;
-        box-shadow: 0 0 25px rgba(0,0,0,0.15);
-        z-index: 9999;
-        display: flex; flex-direction: column;
-        transition: transform 0.3s ease-in-out;
-        border: 1px solid #ddd;
-        font-family: -apple-system, system-ui, sans-serif;
     }
-    .chat-widget.closed { transform: translateY(430px); }
+    .chat-item:hover { background-color: #fffde7; }
 
-    /* Header */
-    .chat-header {
-        height: 50px; background: #fdd835; /* Amarillo */
-        padding: 0 15px; display: flex; align-items: center; justify-content: space-between;
-        cursor: pointer; border-radius: 12px 12px 0 0;
-        user-select: none;
-    }
+    /* MENSAJES */
+    .c-msg-row { display: flex; margin-bottom: 6px; padding: 0 10px; position: relative; z-index: 2; }
+    .c-msg-row.me { justify-content: flex-end; }
     
-    /* Listas y Scroll */
-    .chat-view-list { flex: 1; display: flex; flex-direction: column; background: #fff; overflow: hidden; }
-    .contact-list-scroll { flex: 1; overflow-y: auto; }
-    .chat-view-conv { flex: 1; display: flex; flex-direction: column; height: 100%; }
-    .scroll-container { overflow-y: auto; }
-    .bg-chat { background-color: #efe7dd; }
-
-    /* Items */
-    .contact-item {
-        cursor: pointer; padding: 10px 15px; border-bottom: 1px solid #f5f5f5;
-        display: flex; align-items: center; transition: 0.2s;
+    .c-bubble {
+        max-width: 80%; padding: 8px 12px;
+        border-radius: 12px; font-size: 0.9rem;
+        position: relative; box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+        word-wrap: break-word;
     }
-    .contact-item:hover { background-color: #fff9c4; }
-    
-    .avatar-circle {
-        width: 36px; height: 36px; background: #333; color: #fdd835;
-        border-radius: 50%; display: flex; align-items: center; justify-content: center;
-        font-weight: bold; font-size: 0.85rem; margin-right: 10px;
+    .c-msg-row.me .c-bubble { background: #dcf8c6; border-top-right-radius: 0; }
+    .c-msg-row.them .c-bubble { background: #fff; border-top-left-radius: 0; }
+
+    .c-time {
+        font-size: 0.65rem; color: #999;
+        float: right; margin-left: 8px; margin-top: 4px;
+        display: flex; align-items: center; gap: 3px;
     }
 
-    /* Mensajes */
-    .msg-row { display: flex; margin-bottom: 8px; }
-    .msg-row.me { justify-content: flex-end; }
-    .msg-bubble {
-        max-width: 75%; padding: 8px 12px; border-radius: 10px;
-        font-size: 0.9rem; position: relative; box-shadow: 0 1px 1px rgba(0,0,0,0.1);
+    /* MÓVIL EXCLUSIVO */
+    @media (max-width: 576px) {
+        #chatWidgetContainer {
+            bottom: 0 !important; right: 0 !important; left:0 !important; top:0 !important;
+            width: 100% !important; height: 100% !important;
+            pointer-events: none;
+            justify-content: flex-end;
+            padding: 20px;
+        }
+        .chat-box {
+            pointer-events: auto;
+            width: 100% !important;
+            max-width: 100% !important;
+            height: 85% !important; /* Casi pantalla completa */
+            margin-bottom: 70px;
+        }
+        .chat-float-btn {
+            pointer-events: auto;
+            position: absolute; bottom: 20px; right: 20px;
+        }
     }
-    .msg-row.me .msg-bubble { background: #dcf8c6; border-top-right-radius: 0; }
-    .msg-row.them .msg-bubble { background: #fff; border-top-left-radius: 0; }
-    .msg-time { font-size: 0.65rem; color: #999; text-align: right; margin-top: 2px; }
-
-    .btn-icon { background: none; border: none; padding: 0; color: #212529; }
-    .toggle-icon { transition: 0.3s; }
-    .chat-widget.closed .toggle-icon { transform: rotate(180deg); }
 </style>
 
 <script>
 document.addEventListener("DOMContentLoaded", function() {
-    const widget = document.getElementById('chatWidget');
-    const header = document.getElementById('chatHeaderBtn');
-    const title = document.getElementById('chatTitle');
-    const btnVolver = document.getElementById('btnVolver');
-    
-    const vistaLista = document.getElementById('vistaLista');
-    const vistaChat = document.getElementById('vistaChat');
-    const listaContactos = document.getElementById('listaContactos');
-    const msgsContainer = document.getElementById('chatMsgs');
-    const searchInput = document.getElementById('chatSearch');
-    const formChat = document.getElementById('formEnviarChat'); // Referencia al formulario
-    
-    let allContacts = [];
+    // Sonido notificación
+    const soundNotify = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
 
-    // 1. ABRIR / CERRAR
-    header.addEventListener('click', (e) => {
-        // Ignorar si clic en botón volver
-        if(e.target.closest('#btnVolver')) return;
+    // Referencias DOM
+    const D = {
+        floatBtn: document.getElementById('chatFloatBtn'),
+        box: document.getElementById('chatBox'),
+        closeBtn: document.getElementById('chatCloseBtn'),
+        backInfo: document.getElementById('chatBackInfo'),
+        backBtn: document.getElementById('chatBackBtn'),
         
-        widget.classList.toggle('closed');
+        viewList: document.getElementById('chatViewList'),
+        viewConv: document.getElementById('chatViewConv'),
+        list: document.getElementById('chatContactList'),
+        msgs: document.getElementById('chatMsgArea'),
         
-        // Cargar contactos al abrir si no está cerrado
-        if(!widget.classList.contains('closed')) {
-            cargarContactos();
-        }
-    });
-
-    // 2. CARGAR CONTACTOS
-    async function cargarContactos() {
-        try {
-            const res = await fetch('/Sistema-de-Saldos-y-Pagos-/Public/api/chat_list.php');
-            if(!res.ok) throw new Error('Error API');
-            allContacts = await res.json();
-            renderContactos(allContacts);
-        } catch(err) { 
-            console.error(err);
-            listaContactos.innerHTML = '<div class="p-3 text-danger small text-center">Error cargando lista.</div>';
-        }
-    }
-
-    function renderContactos(data) {
-        listaContactos.innerHTML = '';
-        if(data.length === 0) {
-            listaContactos.innerHTML = '<div class="p-4 text-center text-muted small">No se encontraron chats.</div>';
-            return;
-        }
+        title: document.getElementById('chatTitle'),
+        sub: document.getElementById('chatSubtitle'),
+        avatar: document.getElementById('chatAvatar'),
+        dot: document.getElementById('chatStatusDot'),
         
-        data.forEach(c => {
-            const div = document.createElement('div');
-            div.className = 'contact-item d-flex align-items-center p-3 border-bottom';
-            div.style.cursor = 'pointer';
-            
-            //  AQUÍ PASAMOS EL TIPO DE CONTACTO (cliente o staff)
-            div.onclick = () => abrirChat(c.id, c.nombre, c.tipo_contacto);
-            
-            div.innerHTML = `
-                <div class="avatar-circle me-3 flex-shrink-0 overflow-hidden d-flex align-items-center justify-content-center">
-                    ${c.avatar_html}
-                </div>
-                <div class="flex-grow-1 overflow-hidden">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <span class="fw-bold text-dark text-truncate" style="font-size:0.9rem">${c.nombre}</span>
-                        <span class="small text-muted" style="font-size:0.7rem">${c.hora}</span>
-                    </div>
-                    <div class="d-flex align-items-center justify-content-between">
-                        <div class="${c.style} text-truncate me-2" style="max-width: 160px;">${c.ultimo_msg}</div>
-                        ${c.extra_html ? c.extra_html : ''}
-                    </div>
-                </div>
-            `;
-            listaContactos.appendChild(div);
-        });
-    }
-
-    // Buscador
-    if(searchInput) {
-        searchInput.addEventListener('keyup', (e) => {
-            const val = e.target.value.toLowerCase();
-            const filtrados = allContacts.filter(c => c.nombre.toLowerCase().includes(val));
-            renderContactos(filtrados);
-        });
-    }
-
-    // 3. ABRIR CHAT (Recibe ID, Nombre y TIPO)
-    window.abrirChat = async function(clienteId, nombre, tipo) {
-        vistaLista.classList.add('d-none');
-        vistaChat.classList.remove('d-none');
-        btnVolver.classList.remove('d-none');
+        form: document.getElementById('chatForm'),
+        txt: document.getElementById('chatTextIn'),
+        file: document.getElementById('chatFileIn'),
+        tid: document.getElementById('chatTargetId'),
         
-        title.textContent = nombre;
-        document.getElementById('chatClienteId').value = clienteId;
-
-        //  GUARDAMOS EL TIPO EN EL FORMULARIO (cliente o staff)
-        formChat.dataset.tipo = tipo || 'cliente'; 
-        
-        msgsContainer.innerHTML = '<div class="text-center p-3 small text-muted">Cargando...</div>';
-
-        try {
-            const res = await fetch(`/Sistema-de-Saldos-y-Pagos-/Public/api/chat_history.php?cliente_id=${clienteId}`);
-            const msgs = await res.json();
-            
-            msgsContainer.innerHTML = '';
-            // Detectar mi ID (Asumimos que viene del header PHP en window.APP_USER)
-            const miId = (window.APP_USER && window.APP_USER.id) ? window.APP_USER.id : 0;
-
-            if(msgs.length === 0) {
-                msgsContainer.innerHTML = '<div class="text-center p-5 text-muted small">Inicia la conversación 👋</div>';
-            }
-
-            msgs.forEach(m => {
-                const esMio = (m.tipo_autor === 'usuario'); 
-                pintarBurbuja(m.mensaje, m.hora, esMio);
-            });
-            scrollFondo();
-
-        } catch(e) { console.error(e); }
+        preview: document.getElementById('chatFilePreview'),
+        prevName: document.getElementById('chatFileName')
     };
 
-    // 4. VOLVER
-    btnVolver.addEventListener('click', (e) => {
-        e.stopPropagation();
-        vistaChat.classList.add('d-none');
-        vistaLista.classList.remove('d-none');
-        btnVolver.classList.add('d-none');
-        title.textContent = 'Mensajes';
-        cargarContactos(); // Actualizar lista por si hay nuevos
+    let activeChat = null;
+    let pusherChannel = null;
+
+    // --- 1. ABRIR / CERRAR ---
+    D.floatBtn.addEventListener('click', () => {
+    D.box.classList.remove('d-none');
+    D.floatBtn.classList.add('d-none');
+    loadContacts();
+});
+
+
+    D.closeBtn.addEventListener('click', () => {
+        D.box.classList.add('d-none');
+        D.floatBtn.classList.remove('d-none');
+    });
+    
+    // --- 2. VOLVER A LISTA ---
+    D.backInfo.addEventListener('click', () => {
+        if(activeChat) {
+            if(pusherChannel) pusherChannel.unbind(); // Desconectar eventos
+            activeChat = null;
+            D.viewConv.classList.add('d-none');
+            D.viewList.classList.remove('d-none');
+            D.backBtn.classList.add('d-none');
+            D.title.textContent = 'Mensajes';
+            D.sub.textContent = 'Banana Group';
+            D.avatar.textContent = '?';
+            D.dot.className = 'chat-dot offline';
+            loadContacts();
+        }
     });
 
-    // 5. ENVIAR
-    formChat.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const input = document.getElementById('chatInputMsg');
-        const txt = input.value.trim();
-        const cid = document.getElementById('chatClienteId').value;
+    // --- 3. CARGAR LISTA ---
+    async function loadContacts() {
+        D.list.innerHTML = '<div class="text-center p-4 text-muted small">Cargando...</div>';
+        try {
+            const r = await fetch('/Sistema-de-Saldos-y-Pagos-/Public/api/chat_list.php');
+            const data = await r.json();
+            
+            D.list.innerHTML = '';
+            if(!data || !data.length) {
+                D.list.innerHTML = '<div class="text-center p-5 text-muted small">No hay conversaciones.</div>';
+                return;
+            }
+
+            data.forEach(c => {
+                const row = document.createElement('div');
+                row.className = 'chat-item';
+                row.onclick = () => openChat(c.id, c.nombre, c.avatar_html, c.last_seen);
+                
+                let online = '';
+                if(c.last_seen && (new Date() - new Date(c.last_seen))/1000 < 120) {
+                    online = '<span style="color:#25D366;font-size:1.2rem;line-height:0;margin-left:4px">•</span>';
+                }
+
+                row.innerHTML = `
+                    <div class="chat-avatar">${c.avatar_html || c.nombre[0]}</div>
+                    <div class="flex-grow-1 overflow-hidden">
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <strong class="text-dark text-truncate" style="font-size:0.9rem">${c.nombre} ${online}</strong>
+                            <span class="text-muted" style="font-size:0.7rem">${c.hora||''}</span>
+                        </div>
+                        <div class="text-muted small text-truncate">${c.ultimo_msg || '...'}</div>
+                    </div>
+                `;
+                D.list.appendChild(row);
+            });
+        } catch(e) { console.error("Error lista:", e); }
+    }
+
+    // --- 4. ABRIR CONVERSACIÓN ---
+    window.openChat = async function(id, name, avatar, lastSeen) {
+        activeChat = id;
+        D.tid.value = id;
         
-        //  RECUPERAMOS EL TIPO QUE GUARDAMOS AL ABRIR
-        const tipo = formChat.dataset.tipo || 'cliente';
-
-        if(!txt) return;
-
-        // UI Optimista
-        const now = new Date();
-        const hora = now.getHours() + ':' + String(now.getMinutes()).padStart(2,'0');
-        pintarBurbuja(txt, hora, true);
-        scrollFondo();
-        input.value = '';
-
-        const fd = new FormData();
-        fd.append('cliente_id', cid);
-        fd.append('tipo_contacto', tipo); //  ENVIAMOS EL TIPO A PHP
-        fd.append('mensaje', txt);
+        D.viewList.classList.add('d-none');
+        D.viewConv.classList.remove('d-none');
+        D.backBtn.classList.remove('d-none');
         
-        await fetch('/Sistema-de-Saldos-y-Pagos-/Public/api/chat_send.php', { method:'POST', body:fd });
-    });
+        D.title.textContent = name;
+        D.avatar.innerHTML = avatar || name[0];
+        updateHeaderStatus(lastSeen);
 
-    function pintarBurbuja(txt, hora, esMio) {
+        await loadMessages(id);
+        setupPusher(id);
+    };
+
+    function updateHeaderStatus(lastSeen) {
+        if(!lastSeen) { D.sub.textContent = 'Desconectado'; D.dot.className = 'chat-dot offline'; return; }
+        const diff = (new Date() - new Date(lastSeen))/1000;
+        if(diff < 120) { D.sub.textContent = 'En línea'; D.dot.className = 'chat-dot online'; }
+        else { 
+            const d = new Date(lastSeen);
+            D.sub.textContent = 'Últ. vez ' + d.getHours() + ':' + String(d.getMinutes()).padStart(2,'0');
+            D.dot.className = 'chat-dot offline';
+        }
+    }
+
+    // --- 5. CARGAR HISTORIAL ---
+    async function loadMessages(id) {
+        D.msgs.innerHTML = '<div class="text-center p-3 small">Cargando...</div>';
+        try {
+            const r = await fetch(`/Sistema-de-Saldos-y-Pagos-/Public/api/chat_history.php?cliente_id=${id}`);
+            const msgs = await r.json();
+            
+            D.msgs.innerHTML = '';
+            msgs.forEach(m => appendMsg(m));
+            scrollBottom();
+        } catch(e) { console.error(e); }
+    }
+
+    function appendMsg(m) {
+        // Determinar quién soy (AJUSTAR SEGÚN LÓGICA DE TU BD)
+        // Si 'tipo_autor' viene del backend, úsalo. Si no, inferir.
+        const isMe = (m.tipo_autor === 'usuario'); 
+        
         const div = document.createElement('div');
-        div.className = `msg-row ${esMio ? 'me' : 'them'}`;
+        div.className = `c-msg-row ${isMe ? 'me' : 'them'}`;
+        
+        let content = m.mensaje;
+        if(m.tipo_archivo === 'image') content = `<img src="${m.adjunto}" style="max-width:100%;border-radius:8px;cursor:pointer" onclick="window.open(this.src)">`;
+        else if(m.adjunto) content = `<a href="${m.adjunto}" target="_blank">📎 Archivo</a>`;
+
+        const check = isMe ? '<i class="bi bi-check2-all text-primary" style="font-size:0.8rem"></i>' : '';
+
         div.innerHTML = `
-            <div class="msg-bubble">
-                ${txt}
-                <div class="msg-time">${hora}</div>
+            <div class="c-bubble">
+                ${content}
+                <span class="c-time">${m.hora} ${check}</span>
             </div>
         `;
-        msgsContainer.appendChild(div);
+        D.msgs.appendChild(div);
     }
 
-    function scrollFondo() {
-        msgsContainer.scrollTop = msgsContainer.scrollHeight;
+    function scrollBottom() { D.msgs.scrollTop = D.msgs.scrollHeight; }
+
+    // --- 6. ENVIAR (Click y Enter) ---
+    D.form.addEventListener('submit', async (e) => {
+        e.preventDefault(); // Prevenir recarga
+        
+        const text = D.txt.value.trim();
+        const file = D.file.files[0];
+        
+        if(!text && !file) return;
+
+        // UI Optimista (solo texto)
+        if(text && !file) {
+            const time = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+            appendMsg({ mensaje: text, hora: time, tipo_autor: 'usuario', tipo_archivo: 'text' });
+            scrollBottom();
+        }
+
+        const fd = new FormData();
+        fd.append('cliente_id', activeChat);
+        fd.append('mensaje', text);
+        if(file) fd.append('adjunto', file);
+
+        D.txt.value = '';
+        chatClearFile();
+
+        try {
+            await fetch('/Sistema-de-Saldos-y-Pagos-/Public/api/chat_send.php', { method:'POST', body:fd });
+            if(file) loadMessages(activeChat); 
+        } catch(e) { console.error(e); }
+    });
+
+    // --- 7. ARCHIVOS ---
+    D.file.onchange = () => { 
+        if(D.file.files[0]) { 
+            D.preview.classList.remove('d-none'); 
+            D.prevName.textContent = D.file.files[0].name; 
+        } 
+    };
+    window.chatClearFile = () => { D.file.value=''; D.preview.classList.add('d-none'); };
+
+    // --- 8. PUSHER REAL ---
+    function setupPusher(chatId) {
+        if(!window.Pusher || !window.PUSHER_CONFIG) return;
+        
+        const pusher = new Pusher(window.PUSHER_CONFIG.key, {
+            cluster: window.PUSHER_CONFIG.cluster,
+            forceTLS: true
+        });
+
+        // IMPORTANTE: usar el mismo canal que en chat_send.php
+        const channelName = 'chat_' + chatId;
+        pusherChannel = pusher.subscribe(channelName);
+
+        pusherChannel.bind('nuevo-mensaje', (data) => {
+            // Si el mensaje viene marcado como 'usuario', es mío -> lo ignoro
+            if (data.tipo_autor === 'usuario') {
+                return;
+            }
+
+            // Sonido
+            soundNotify.play().catch(()=>{});
+
+            // Pintar mensaje usando todo el payload del backend
+            appendMsg({
+                mensaje: data.mensaje,
+                hora:    data.hora,
+                tipo_autor: data.tipo_autor || 'cliente',
+                tipo_archivo: data.tipo_archivo || 'text',
+                adjunto: data.adjunto || null
+            });
+            scrollBottom();
+            
+            // Estado
+            D.sub.textContent = 'En línea';
+            D.dot.className = 'chat-dot online';
+        });
     }
+
+    // --- 9. STATUS LOOP ---
+    function updateOnlineStatus() { 
+        fetch('/Sistema-de-Saldos-y-Pagos-/Public/api/chat_status.php').catch(()=>{}); 
+    }
+    setInterval(updateOnlineStatus, 30000);
 });
 </script>

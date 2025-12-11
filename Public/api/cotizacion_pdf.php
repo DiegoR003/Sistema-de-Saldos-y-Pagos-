@@ -16,254 +16,269 @@ if ($id <= 0) die("ID inválido.");
 
 $pdo = db();
 
-// 1. Cargar Datos
-$st = $pdo->prepare("SELECT * FROM cotizaciones WHERE id = ?");
+// 1. DATOS BD
+$sqlCot = "SELECT id, empresa, total, creado_en FROM cotizaciones WHERE id = ?";
+$st = $pdo->prepare($sqlCot);
 $st->execute([$id]);
 $cot = $st->fetch(PDO::FETCH_ASSOC);
+
 if (!$cot) die("Cotización no encontrada.");
 
-$stI = $pdo->prepare("SELECT * FROM cotizacion_items WHERE cotizacion_id = ? ORDER BY id ASC");
+$folioVisual = 'COT-' . str_pad((string)$cot['id'], 5, '0', STR_PAD_LEFT);
+$cliente = mb_strtoupper($cot['empresa'], 'UTF-8');
+$total = number_format((float)$cot['total'], 2);
+
+// 2. ÍTEMS
+$sqlItems = "SELECT grupo, opcion, valor FROM cotizacion_items WHERE cotizacion_id = ? ORDER BY id ASC";
+$stI = $pdo->prepare($sqlItems);
 $stI->execute([$id]);
-$items = $stI->fetchAll(PDO::FETCH_ASSOC);
+$itemsDb = $stI->fetchAll(PDO::FETCH_ASSOC);
 
-// 2. Descripciones del Cotizador (Textos exactos del formulario)
-function getDescripcionServicio($grupo, $opcion = '') {
-    $g = strtolower(trim($grupo));
-    
-    // Textos base
-    $textos = [
-        'cuenta'        => 'Es tu enlace entre la agencia y tu empresa. Se encarga de crear y coordinar tu estrategia de marketing digital y atender todas tus dudas.',
-        'publicaciones' => 'Se publica tanto en tu feed (muro) como en historias. Incluye Facebook e Instagram.',
-        'campañas'      => 'No incluye el presupuesto asignado a cada campaña (pago directo a Facebook/Meta).',
-        'reposteo'      => 'Atiende mensajes y comentarios en horario laboral. Manejo de Google Maps, TripAdvisor, etc.',
-        'stories'       => 'Incluye diseño de post y stories.',
-        'imprenta'      => 'Diseño gráfico para imprenta o identidad.',
-        'fotos'         => 'Sesión fotográfica profesional.',
-        'video'         => 'Sesión de producción de video profesional.',
-        'ads'           => 'Manejo de campañas en Google ADS.',
-        'web'           => 'Desarrollo y mantenimiento de sitio web.',
-        'mkt'           => 'Estrategia de Email Marketing.',
+function getInfoServicio($grupo, $opcion) {
+    $g = mb_strtolower(trim($grupo), 'UTF-8');
+    $map = [
+        'cuenta' => ['t' => 'Cuota Fija', 'd' => 'Asignación de ejecutivo.'],
+        'publicaciones' => ['t' => 'Posts Semanales', 'd' => 'Publicación feed/stories.'],
+        'meta' => ['t' => 'Meta ADS', 'd' => 'Campaña semanal.'],
+        'reposteo' => ['t' => 'Community Manager', 'd' => 'Gestión redes y mapas.'],
+        'stories' => ['t' => 'Diseño Gráfico', 'd' => 'Diseños espejo y stories.'],
+        'fotos' => ['t' => 'Fotografía', 'd' => 'Sesión profesional.'],
+        'video' => ['t' => 'Video Reels', 'd' => 'Producción de video.'],
+        'ads' => ['t' => 'Google ADS', 'd' => 'Campañas SEM.'],
+        'email' => ['t' => 'Email Marketing', 'd' => 'Boletines mensuales.'],
+        'mkt'   => ['t' => 'Email Marketing', 'd' => 'Boletines mensuales.'], // FIX PARA MKT
+        'web' => ['t' => 'Sitio Web', 'd' => 'Desarrollo web.']
     ];
-
-    $desc = $textos[$g] ?? '';
-
-    // Ajustes específicos según la opción (para que coincida más con el PDF)
-    if ($g === 'fotos') $desc .= " *Máximo 2 horas de visita.";
-    if ($g === 'video') $desc .= " *Máximo 2 horas de visita.";
-    if ($g === 'publicaciones') $desc .= " *No incluye el diseño de la publicación (si no se contrata diseño aparte).";
-
-    return $desc;
+    foreach ($map as $k => $v) { if (strpos($g, $k) !== false) return $v; }
+    return ['t' => mb_strtoupper($grupo), 'd' => $opcion];
 }
 
-// 3. Variables de Formato
-$folio    = $cot['folio'] ?? 'COT-' . str_pad((string)$cot['id'], 5, '0', STR_PAD_LEFT);
-$fecha    = date('d/m/Y', strtotime($cot['creado_en']));
-$cliente  = mb_strtoupper($cot['empresa']);
-$total    = number_format((float)$cot['total'], 2);
+$items = [];
+foreach ($itemsDb as $row) {
+    $items[] = getInfoServicio($row['grupo'], $row['opcion']);
+}
 
+// 3. IMÁGENES BASE64 (DORADAS)
 // Logo
-$rutaLogo = __DIR__ . '/../../Public/assets/logo.png'; 
-$logoBase64 = '';
+$rutaLogo = __DIR__ . '/../../Public/assets/logo.png';
+$logoHTML = "";
 if (file_exists($rutaLogo)) {
-    $type = pathinfo($rutaLogo, PATHINFO_EXTENSION);
-    $data = file_get_contents($rutaLogo);
-    $logoBase64 = 'data:image/' . $type . ';base64,' . base64_encode($data);
+    $d = file_get_contents($rutaLogo);
+    $b64 = 'data:image/' . pathinfo($rutaLogo, PATHINFO_EXTENSION) . ';base64,' . base64_encode($d);
+    $logoHTML = "<img src='$b64' style='height:50px;'>";
 }
 
-// 4. HTML - REPLICA DEL PDF ORIGINAL
-$html = '
+// Iconos Sociales (Placeholders Dorados para mantener el archivo ligero y funcional)
+// Estos son cuadrados/círculos dorados simples.
+$ic_mail = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAABmJLR0QA/wD/AP+gvaeTAAAAUElEQVRIie3SMQqDQBQF0Rk02WgVPYJ26z10C/Zewc5LCMbOQjthk84mzMLHB4+B4fs7T5KJ289+3ZhtMnBnXExq4M64mNTAnXExqYF74/L+Ag9WpA97R61H6QAAAABJRU5ErkJggg==";
+$ic_phone = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAABmJLR0QA/wD/AP+gvaeTAAAAVklEQVRIie3SsQ2AMBAEwZ8jBSckuu9K6IBOqCCBiEhJg8350oz2bB92Wym5zayk110FqIFVgBpYBaiBVYAaWAWogVWAGlgFqIFVgBpYBaiBVcAb+P9+sQ+jLA97/k7w+gAAAABJRU5ErkJggg==";
+$ic_web = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAABmJLR0QA/wD/AP+gvaeTAAAAWklEQVRIie3SwQmAQBBE0d9C0I4t2IIt2IIt2IYVGIQgIsQ0sA/zYObxYUiSi9nN7KQ3vQWoATWwGvAG1IB3oAbUgBqwGlADasBqQA2oAasBNaAGrAb8g1/sA/V8D3t1l3+7AAAAAElFTkSuQmCC";
+$ic_fb = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAABmJLR0QA/wD/AP+gvaeTAAAALUlEQVRIiWNgGAWjYBSMglEwCkbBSAc8BED+w4Bf8D8D/vCAwz8M+AX/M+APCwA8Gg97z53eOAAAAABJRU5ErkJggg=="; 
+$ic_ig = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAABmJLR0QA/wD/AP+gvaeTAAAAQElEQVRIie3SwQ0AIAQDwU9n5WDL0A1d0AnB80MC52Y3s5JedxWgBlYBamAVoAZWAWpgFaAGVgFqYBWgBlYBb+AD9cIPe3s2Y6gAAAAASUVORK5CYII=";
+$ic_in = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAABmJLR0QA/wD/AP+gvaeTAAAANUlEQVRIiWNgGAWjYBSMglEwCkbBSAc8BED+w4Bf8D8D/vCAwz8M+AX/M+APDzj8w0AGBgA82Qo/2495+wAAAABJRU5ErkJggg==";
+
+
+// 4. PLANTILLA HTML
+ob_start();
+?>
 <!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
     <style>
-        @page { margin: 40px 50px; }
+        @page { margin: 0; padding: 0; }
+        html, body { height: 100%; margin: 0; padding: 0; }
         body {
-            font-family: "Helvetica", Arial, sans-serif;
-            color: #444;
-            font-size: 11px;
-            line-height: 1.4;
+            background-color: #2d2d2d;
+            font-family: 'Helvetica', sans-serif;
+            color: #333;
+        }
+        .page-container {
+            min-height: 100%;
+            position: relative;
+            background-color: #fff;
         }
         
         /* HEADER */
-        .header-table { width: 100%; margin-bottom: 20px; }
-        .header-table td { vertical-align: top; }
-        
-        .logo-img { height: 70px; margin-bottom: 10px; display:block; margin-left: auto; }
-        
-        .attn-label {
-            font-size: 10px;
-            font-weight: bold;
-            color: #888;
-            letter-spacing: 1px;
-            margin-bottom: 5px;
-            text-transform: uppercase;
-        }
-        .client-name {
-            font-size: 16px;
-            font-weight: bold;
-            color: #000;
-            text-transform: uppercase;
-            margin-bottom: 20px;
-        }
-        .cot-label {
-            font-size: 12px;
-            font-weight: bold;
-            color: #888;
-            letter-spacing: 2px;
-            text-transform: uppercase;
-        }
-        
-        /* PRECIO GRANDE */
-        .price-container {
-            text-align: right;
-            margin-top: 10px;
-        }
-        .big-price {
-            font-size: 42px; /* Tamaño grande como en el PDF */
-            font-weight: bold;
-            color: #000;
-            line-height: 1;
-        }
-        .price-sub {
-            font-size: 14px;
-            color: #666;
-            font-weight: normal;
-        }
-        .plus-sign {
-            font-size: 24px;
-            color: #fdd835;
-            font-weight: bold;
-            margin-top: 10px;
-            margin-bottom: 10px;
-        }
+        .header { background-color: #f9f9f9; padding: 30px 40px; border-bottom: 4px solid #f9af24; }
+        table.head-tbl { width: 100%; border-collapse: collapse; }
+        td.head-left { width: 60%; vertical-align: top; }
+        td.head-right { width: 40%; vertical-align: top; text-align: right; }
 
-        /* SERVICIOS */
-        .services-table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-        .services-table td { padding-bottom: 15px; vertical-align: top; }
-        
-        .svc-title {
-            font-size: 12px;
-            font-weight: bold;
-            color: #eebb00; /* Dorado/Naranja del PDF */
-            text-transform: uppercase;
-            margin-bottom: 3px;
+        .label-attn {
+            font-size: 10px; font-weight: bold; letter-spacing: 1px;
+            color: #fff; background-color: #f9af24; 
+            padding: 3px 10px; border-radius: 10px;
+            text-transform: uppercase; display: inline-block; margin-bottom: 5px;
         }
-        .svc-desc {
-            font-size: 11px;
-            color: #333;
+        .client-name { font-size: 24px; font-weight: bold; color: #1a1a1a; text-transform: uppercase; margin-bottom: 5px; }
+        .folio { font-size: 11px; color: #666; font-weight: bold; }
+
+        .price-tag {
+            background-color: #1a1a1a; color: #f9af24;
+            padding: 10px 15px; border-radius: 8px;
+            display: inline-block; text-align: right;
+            margin-top: 10px; border: 1px solid #f9af24;
+        }
+        .price-val { font-size: 24px; font-weight: bold; line-height: 1; }
+        .price-sub { font-size: 10px; color: #ccc; margin-top: 2px; }
+
+        /* BODY (Padding bottom grande para el footer) */
+        .body-section { padding: 20px 40px 180px 40px; }
+        
+        .section-title {
+            font-size: 12px; font-weight: bold; color: #1a1a1a;
+            text-transform: uppercase; border-bottom: 2px solid #f9af24;
+            padding-bottom: 3px; margin-bottom: 10px; display: inline-block;
         }
         
+        /* LISTADO */
+        .svc-table { width: 100%; border-collapse: collapse; }
+        .svc-row td { padding: 8px 12px; vertical-align: top; }
+        .svc-row:nth-child(odd) td { background-color: #fff8e1; }
+        .svc-row:nth-child(even) td { background-color: #fdfdfd; }
+        .svc-name { font-size: 11px; font-weight: bold; color: #000; margin-bottom: 2px; }
+        .svc-detail { font-size: 10px; color: #555; font-style: italic; }
+
         /* TÉRMINOS */
-        .terms {
-            margin-top: 40px;
-            font-size: 9px;
-            color: #555;
-            text-align: justify;
-            line-height: 1.3;
+        .terms-box {
+            margin-top: 15px; background-color: #f4f4f4; padding: 10px 15px;
+            border-radius: 5px; border-left: 3px solid #1a1a1a;
         }
-        .terms p { margin: 0 0 5px 0; }
+        .terms-head { font-size: 9px; font-weight: bold; margin-bottom: 5px; color: #000; }
+        .terms-text { font-size: 9px; color: #444; text-align: justify; line-height: 1.3; }
+        .terms-text p { margin: 0 0 2px 0; }
+
+        /* FOOTER OSCURO PEGADO AL FINAL */
+        .footer {
+            position: absolute;
+            bottom: 0; width: 100%;
+            background-color: #1a1a1a; color: #fff;
+            padding: 20px 40px;
+            border-top: 3px solid #f9af24;
+        }
+        table.ft-tbl { width: 100%; border-collapse: collapse; }
+        td.ft-col { width: 50%; vertical-align: top; }
         
-        /* FOOTER CONTACTO */
-        .footer-table { 
-            width: 100%; 
-            margin-top: 40px; 
-            border-top: 1px solid #ddd; 
-            padding-top: 20px;
-        }
-        .contact-name { font-weight: bold; font-size: 12px; color: #000; }
-        .contact-role { font-size: 11px; color: #666; margin-bottom: 5px; }
-        .contact-detail { font-size: 11px; color: #444; }
-        .contact-icon { color: #fdd835; margin-right: 5px; font-weight: bold; }
+        .ft-name { font-size: 12px; font-weight: bold; color: #f9af24; text-transform: uppercase; }
+        .ft-role { font-size: 9px; color: #ccc; margin-bottom: 8px; font-style: italic; }
+        .ft-data { font-size: 9px; color: #fff; margin-bottom: 4px; }
+        
+        /* Estilos de enlaces */
+        .link-clean { text-decoration: none; color: inherit; display: inline-block; }
+        .icon-img { width: 14px; height: 14px; vertical-align: middle; margin-right: 5px; }
+        .ft-data a:hover { text-decoration: underline; }
 
     </style>
 </head>
 <body>
-
-    <table class="header-table">
-        <tr>
-            <td width="60%">
-                <div class="attn-label">EN ATENCIÓN A</div>
-                <div class="client-name">' . $cliente . '</div>
-                <div class="cot-label">COTIZACIÓN</div>
-                <div style="font-size:10px; color:#888; margin-top:5px;">FOLIO: ' . $folio . '</div>
-            </td>
-            <td width="40%" align="right">
-                ' . ($logoBase64 ? '<img src="' . $logoBase64 . '" class="logo-img">' : '<h2>BANANA</h2>') . '
-                
-                <div class="price-container">
-                    <div class="big-price">$' . $total . ' <span style="font-size:20px">MXN*</span></div>
-                    <div class="price-sub">+ IVA mensual</div>
-                </div>
-            </td>
-        </tr>
-    </table>
-
-    <div class="plus-sign">+</div>
-
-    <table class="services-table">';
-
-    foreach ($items as $it) {
-        $titulo = $it['grupo'];
-        if(!empty($it['opcion'])) $titulo .= " (" . $it['opcion'] . ")";
-        
-        $desc = getDescripcionServicio($it['grupo'], $it['opcion']);
-
-        $html .= '
-        <tr>
-            <td>
-                <div class="svc-title">' . htmlspecialchars($titulo) . '</div>
-                <div class="svc-desc">' . htmlspecialchars($desc) . '</div>
-            </td>
-        </tr>';
-    }
-
-    $html .= '
-    </table>
-
-    <div class="terms">
-        <p>* Contrato especial a 4 meses. Después es renovable por periodos de 1 mes.</p>
-        <p>* Se paga durante el mes de la emisión de la factura. En caso contrario se cobran $1,000 adicionales por concepto de pago tardío y se suspende el servicio totalmente.</p>
-        <p>* No se da descuento por el tiempo suspendido.</p>
-        <p>* No se prorratean paquetes. (Por ejemplo, si el día 5 de Septiembre se desea cancelar el servicio y pagar el mes en curso, debe pagarse todo el mes de Septiembre, no solamente 5 días).</p>
-        <p>* Se tiene hasta el día 5 de cada mes para cancelar el servicio del siguiente mes. (Por ejemplo, a más tardar el 5 de Septiembre se debe avisar que no se requerirá el servicio en el mes de Octubre).</p>
-        <p>* El hospedaje y dominio están incluidos en su paquete durante la contratación del servicio mensual; a partir de la cancelación aplica anualidad de $3,500 + IVA en caso de querer mantener el sitio en línea.</p>
-        <p>* No nos hacemos responsables de estadísticas de ventas si el cliente interviene en el proceso en contra de nuestras recomendaciones.</p>
-        <p>* Diseños de emergencia se entregan en 60 minutos. Solo se consideran emergencias las situaciones que alteren la operación de su negocio (Desastres naturales, previo aviso y vacantes).</p>
-        <p>* Planeación del mes siguiente se entrega el día 20 del mes anterior como máximo, dejando 10 días naturales para correcciones y/o ajustes.</p>
-        <p>* Website informativo se entrega 15 días naturales después de tener toda la información que incluirá el mismo.</p>
-        <p>* Website con tema web se entrega en 20 días hábiles una vez entregada toda la información que incluirá el mismo.</p>
-        <p>* Horario de atención: 8:00 am a 5:00 pm hora Los Cabos. 9:00 am a 6:00 pm hora Guadalajara lunes a viernes. No atendemos sábados, domingos ni días festivos.</p>
-        <p>* Precios más IVA en caso de factura, depósito o transferencia.</p>
-        <p>* Las sesiones se pueden reprogramar 24 hrs antes. Si se cancelan entre 1 y 30 minutos antes hay una cuota de $500 por foto y $500 por video. Si se cancela en menos de 30 minutos antes se considera como sesión cumplida.</p>
-        <p>* Todos los servicios, se usen o no total o parcialmente, vencen el último día hábil de cada mes. No son acumulables.</p>
+<div class="page-container">
+    
+    <div class="header">
+        <table class="head-tbl">
+            <tr>
+                <td class="head-left">
+                    <div class="label-attn">EN ATENCIÓN A</div>
+                    <div class="client-name"><?= $cliente ?></div>
+                    <div class="folio">FOLIO: <?= $folioVisual ?></div>
+                </td>
+                <td class="head-right">
+                    <?= $logoHTML ?>
+                    <br>
+                    <div class="price-tag">
+                        <div class="price-val">$<?= $total ?> <span style="font-size:10px; color:#fff">MXN</span></div>
+                        <div class="price-sub">+ IVA MENSUAL</div>
+                    </div>
+                </td>
+            </tr>
+        </table>
     </div>
 
-    <table class="footer-table">
-        <tr>
-            <td width="60%">
-                <div class="contact-name">Adamaris Abigail Castillo Jimenez</div>
-                <div class="contact-role">Dirección Operativa</div>
-                <div class="contact-detail"><span class="contact-icon">✉</span> adamaris@bananagroup.mx</div>
-            </td>
-            <td width="40%" align="right" valign="bottom">
-                <div class="contact-detail" style="font-size:14px; font-weight:bold;">(624) 125 0058</div>
-                <div class="contact-detail">www.bananagroup.mx</div>
-            </td>
-        </tr>
-    </table>
+    <div class="body-section">
+        <div class="section-title">Servicios Incluidos</div>
+        
+        <table class="svc-table">
+            <?php foreach($items as $item): ?>
+            <tr class="svc-row">
+                <td width="100%">
+                    <div class="svc-name"><?= htmlspecialchars($item['t']) ?></div>
+                    <div class="svc-detail">
+                        <?php if($item['d']): ?>* <?= htmlspecialchars($item['d']) ?><?php else: ?>Servicio profesional.<?php endif; ?>
+                    </div>
+                </td>
+            </tr>
+            <?php endforeach; ?>
+        </table>
 
+        <div class="terms-box">
+            <div class="terms-head">* Contrato a 4 meses. Renovable mensualmente.</div>
+            <div class="terms-text">
+                <p>• Pago en mes de emisión. Tardío genera $1,000 extra.</p>
+                <p>• Sin descuentos por suspensión. No se prorratean paquetes.</p>
+                <p>• Cancelaciones aviso previo día 5.</p>
+                <p>• Hosting incluido en contrato. Al cancelar $3,500 anual.</p>
+                <p>• No responsables por intervención del cliente.</p>
+                <p>• Emergencias entrega 60min (solo desastres/vacantes).</p>
+                <p>• Planeación entrega día 20 mes anterior.</p>
+                <p>• Horario: 8am-5pm (Cabo), Lun-Vie.</p>
+                <p>• Precios +IVA. Sesiones reprogramables 24h antes.</p>
+                <p>• Servicios no acumulables.</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="footer">
+        <table class="ft-tbl">
+            <tr>
+                <td class="ft-col" style="border-right: 1px solid #444; padding-right: 15px;">
+                    <div class="ft-name">Adamaris Abigail Castillo</div>
+                    <div class="ft-role">Dirección Operativa</div>
+                    
+                    <div class="ft-data">
+                        <a href="mailto:adamaris@bananagroup.mx" class="link-clean">
+                            <img src="<?= $ic_mail ?>" class="icon-img"> adamaris@bananagroup.mx
+                        </a>
+                    </div>
+                    <div class="ft-data">
+                        <a href="tel:+526241250058" class="link-clean">
+                            <img src="<?= $ic_phone ?>" class="icon-img"> (624) 125 0058
+                        </a>
+                    </div>
+                </td>
+
+                <td class="ft-col" style="padding-left: 20px;">
+                    <div class="ft-data" style="margin-bottom:10px;">
+                        <a href="https://www.bananagroup.mx" target="_blank" class="link-clean">
+                            <img src="<?= $ic_web ?>" class="icon-img"> www.bananagroup.mx
+                        </a>
+                    </div>
+                    
+                    <div style="font-size:9px; color:#ccc;">
+                        <a href="https://facebook.com" target="_blank" class="link-clean" style="margin-right:10px;">
+                            <img src="<?= $ic_fb ?>" class="icon-img" style="width:12px;height:12px;"> Facebook
+                        </a>
+                        <a href="https://instagram.com" target="_blank" class="link-clean" style="margin-right:10px;">
+                            <img src="<?= $ic_ig ?>" class="icon-img" style="width:12px;height:12px;"> Instagram
+                        </a>
+                        <a href="https://linkedin.com" target="_blank" class="link-clean">
+                            <img src="<?= $ic_in ?>" class="icon-img" style="width:12px;height:12px;"> LinkedIn
+                        </a>
+                    </div>
+                </td>
+            </tr>
+        </table>
+    </div>
+</div>
 </body>
-</html>';
-
-// Generar PDF
+</html>
+<?php
+$html = ob_get_clean();
 $options = new Options();
 $options->set('isRemoteEnabled', true);
+$options->set('defaultFont', 'Helvetica');
 $dompdf = new Dompdf($options);
 $dompdf->loadHtml($html);
 $dompdf->setPaper('A4', 'portrait');
 $dompdf->render();
-
-// Nombre de Archivo
 $cleanName = preg_replace('/[^a-zA-Z0-9]/', '_', $cot['empresa']);
 $dompdf->stream("Cotizacion_{$cleanName}.pdf", ["Attachment" => true]);

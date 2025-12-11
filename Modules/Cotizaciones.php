@@ -229,6 +229,12 @@ $qs = $_GET; unset($qs['p']);
           <i class="bi bi-file-earmark-pdf-fill text-danger me-2"></i>Descargar PDF
         </a>
       </li>
+      <li>
+    <button class="dropdown-item" type="button" 
+            onclick="enviarCotizacion(<?= $id ?>, '<?= htmlspecialchars($r['empresa'], ENT_QUOTES) ?>')">
+        <i class="bi bi-envelope-fill text-primary me-2"></i>Enviar Cotización
+    </button>
+</li>
                 </ul>
               </div>
             </td>
@@ -791,7 +797,7 @@ window.confirmarAprobacion = function() {
 </script>
 
 <script>
-// ... tus otros scripts ...
+
 
 // ✅ Nueva función: Valida RFC y luego muestra SweetAlert
 function aprobarConRFC(event) {
@@ -863,6 +869,59 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 });
+</script>
+<script>
+function enviarCotizacion(id, cliente) {
+    Swal.fire({
+        title: '¿Enviar cotización?',
+        text: `Se generará el PDF y se enviará por correo a: ${cliente}`,
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonColor: '#fdd835', // Amarillo Banana
+        cancelButtonColor: '#d33',
+        confirmButtonText: 'Sí, enviar',
+        cancelButtonText: 'Cancelar',
+        showLoaderOnConfirm: true,
+        preConfirm: () => {
+            let fd = new FormData();
+            fd.append('id', id);
+            
+            // Llamamos al archivo que genera y envía el correo
+            return fetch('/Sistema-de-Saldos-y-Pagos-/Public/api/cotizacion_send.php', {
+                method: 'POST',
+                body: fd
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(response.statusText);
+                }
+                return response.json();
+            })
+            .catch(error => {
+                Swal.showValidationMessage(`Request failed: ${error}`);
+            });
+        },
+        allowOutsideClick: () => !Swal.isLoading()
+    }).then((result) => {
+        if (result.isConfirmed) {
+            if (result.value.ok) {
+                Swal.fire({
+                    icon: 'success',
+                    title: '¡Enviado!',
+                    text: result.value.msg,
+                    confirmButtonColor: '#198754'
+                });
+            } else {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Error',
+                    text: result.value.msg || 'No se pudo enviar el correo.',
+                    confirmButtonColor: '#dc3545'
+                });
+            }
+        }
+    });
+}
 </script>
 
  </body>

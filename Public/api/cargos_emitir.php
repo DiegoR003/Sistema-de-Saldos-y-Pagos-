@@ -2,11 +2,13 @@
 // Public/api/cargos_emitir.php
 declare(strict_types=1);
 
+// Carga librerías y configuración
+require_once __DIR__ . '/../../vendor/autoload.php';
 require_once __DIR__ . '/../../App/bd.php';
 require_once __DIR__ . '/../../App/date_utils.php';
+require_once __DIR__ . '/../../App/pusher_config.php';
 
-// ✅ 1. Incluir dependencias de notificación y correo
-require_once __DIR__ . '/../../App/notifications.php';
+// Incluimos mailer si existe
 if (file_exists(__DIR__ . '/../../App/mailer.php')) {
     require_once __DIR__ . '/../../App/mailer.php';
 }
@@ -14,272 +16,145 @@ if (file_exists(__DIR__ . '/../../App/mailer.php')) {
 if (session_status() === PHP_SESSION_NONE) session_start();
 
 function back(string $msg, bool $ok = true): never {
-    // Intentamos volver a la página anterior, o por defecto a cobrar
     $r = $_SERVER['HTTP_REFERER'] ?? '/Sistema-de-Saldos-y-Pagos-/Public/index.php?m=cobrar';
-    // Limpiamos params viejos de la url
     $r = strtok($r, '?') . '?' . parse_url($r, PHP_URL_QUERY); 
-    
-    // Agregamos feedback
     $sep = (strpos($r, '?') === false) ? '?' : '&';
     $r .= $sep . ($ok ? 'ok=1&msg=' : 'err=') . urlencode($msg);
-    
     header("Location: $r");
     exit;
 }
 
 try {
-
     if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
-        http_response_code(405);
         exit('Método no permitido');
     }
 
     $pdo = db();
 
-    /* =======================================================
-       1. Datos enviados
-       ======================================================= */
+    // 1. Recibir Datos
     $ordenId = (int)($_POST['orden_id'] ?? 0);
-    if ($ordenId <= 0) back('Orden inválida', false);
-
     $periodo_inicio = trim((string)($_POST['periodo_inicio'] ?? ''));
     $periodo_fin    = trim((string)($_POST['periodo_fin'] ?? ''));
 
-    if ($periodo_inicio === '' || $periodo_fin === '') {
-        back('Periodo inválido para emitir.', false);
+    if ($ordenId <= 0 || !$periodo_inicio || !$periodo_fin) {
+        back('Datos incompletos.', false);
     }
 
     $inicio = new DateTimeImmutable($periodo_inicio);
     $fin    = new DateTimeImmutable($periodo_fin);
 
-    /* =======================================================
-       2. Validar orden y OBTENER DATOS CLIENTE
-       ======================================================= */
-    // ✅ MODIFICACIÓN: Hacemos JOIN para traer correo y empresa del cliente
-    $st = $pdo->prepare("
-        SELECT o.*, c.empresa, c.correo 
-        FROM ordenes o
-        JOIN clientes c ON c.id = o.cliente_id
-        WHERE o.id = ?
-    ");
+    // 2. Obtener Info
+    $st = $pdo->prepare("SELECT o.*, c.empresa, c.correo FROM ordenes o JOIN clientes c ON c.id = o.cliente_id WHERE o.id = ?");
     $st->execute([$ordenId]);
     $orden = $st->fetch(PDO::FETCH_ASSOC);
 
-    if (!$orden) back('Orden no encontrada', false);
-    if ($orden['estado'] !== 'activa')
-        back('La orden no está activa. No puedes emitir cargos.', false);
+    if (!$orden) back('Orden no encontrada.', false);
 
-    /* =======================================================
-       3. Verificar si YA existe cargo del periodo
-       ======================================================= */
-    $st = $pdo->prepare("
-        SELECT *
-        FROM cargos
-        WHERE orden_id = ?
-          AND periodo_inicio = ?
-          AND periodo_fin = ?
-        LIMIT 1
-    ");
-    $st->execute([
-        $ordenId,
-        $inicio->format('Y-m-d'),
-        $fin->format('Y-m-d')
-    ]);
+    // 3. Verificar Cargo Previo
+    $st = $pdo->prepare("SELECT * FROM cargos WHERE orden_id = ? AND periodo_inicio = ? AND periodo_fin = ? LIMIT 1");
+    $st->execute([$ordenId, $inicio->format('Y-m-d'), $fin->format('Y-m-d')]);
     $cargo = $st->fetch(PDO::FETCH_ASSOC);
 
-    /* =======================================================
-       4. Items Activos
-       ======================================================= */
-    $st = $pdo->prepare("
-        SELECT id, concepto, monto
-        FROM orden_items
-        WHERE orden_id = ?
-          AND pausado = 0
-          AND (billing_type = 'recurrente'
-            OR (billing_type='una_vez' AND end_at IS NULL))
-        ORDER BY id
-    ");
+    // 4. Calcular Items y Totales
+    $st = $pdo->prepare("SELECT id, concepto, monto FROM orden_items WHERE orden_id = ? AND pausado = 0 AND (billing_type = 'recurrente' OR (billing_type='una_vez' AND end_at IS NULL))");
     $st->execute([$ordenId]);
     $items = $st->fetchAll(PDO::FETCH_ASSOC);
 
-    if (!$items) back("La orden no tiene servicios activos.", false);
+    if (!$items) back("No hay servicios activos.", false);
 
-    /* =======================================================
-       5. Calcular totales y Preparar lista HTML
-       ======================================================= */
     $subtotal = 0.0;
-    $conceptosHtml = []; // ✅ Para el correo
-
+    $listaHtml = "";
     foreach ($items as $r) {
-        $montoItem = (float)$r['monto'];
-        $subtotal += $montoItem;
-        // Agregamos a la lista visual
-        $conceptosHtml[] = "<li>" . htmlspecialchars($r['concepto']) . ": <strong>$" . number_format($montoItem, 2) . "</strong></li>";
+        $m = (float)$r['monto'];
+        $subtotal += $m;
+        $listaHtml .= "<li>" . htmlspecialchars($r['concepto']) . ": <strong>$" . number_format($m, 2) . "</strong></li>";
     }
-
-    $iva   = round($subtotal * 0.16, 2);
+    $iva = round($subtotal * 0.16, 2);
     $total = round($subtotal + $iva, 2);
-    
-    // Unimos la lista para el correo
-    $listaServicios = "<ul>" . implode('', $conceptosHtml) . "</ul>";
 
     $pdo->beginTransaction();
 
-    /* =======================================================
-       6. Si el cargo YA EXISTE → ACTUALIZAR (pero respetar estatus)
-       ======================================================= */
+    // 5. Guardar/Actualizar Cargo
     if ($cargo) {
-
-        $estatus = ($cargo['estatus'] === 'pagado') ? 'pagado' : 'emitido';
-
-        $upd = $pdo->prepare("
-            UPDATE cargos
-            SET subtotal=?, iva=?, total=?, estatus=?
-            WHERE id=?
-        ");
-        $upd->execute([$subtotal, $iva, $total, $estatus, $cargo['id']]);
-
-        // Regenerar cargo_items
-        $pdo->prepare("DELETE FROM cargo_items WHERE cargo_id=?")
-            ->execute([$cargo['id']]);
-
-        $insPart = $pdo->prepare("
-            INSERT INTO cargo_items
-                (cargo_id, orden_item_id, concepto, monto_base, iva, total)
-            VALUES (?,?,?,?,?,?)
-        ");
-
-        foreach ($items as $r) {
-            $mBase = (float)$r['monto'];
-            $mIva  = round($mBase * 0.16, 2);
-            $insPart->execute([
-                $cargo['id'],
-                $r['id'],
-                $r['concepto'],
-                $mBase,
-                $mIva,
-                $mBase + $mIva
-            ]);
-        }
-
-        $pdo->commit();
-        
-        // --- NOTIFICACIONES (Update) ---
-        enviar_notificaciones_cargo($pdo, $orden, $cargo['id'], $total, $listaServicios, $inicio->format('Y-m-d'), $fin->format('Y-m-d'), 'actualizado');
-
-        back("Cargo actualizado (".$estatus.")", true);
+        $pdo->prepare("UPDATE cargos SET subtotal=?, iva=?, total=?, estatus='emitido' WHERE id=?")->execute([$subtotal, $iva, $total, $cargo['id']]);
+        $pdo->prepare("DELETE FROM cargo_items WHERE cargo_id=?")->execute([$cargo['id']]);
+        $cargoId = $cargo['id'];
+        $accionTxt = 'actualizado';
+    } else {
+        $pdo->prepare("INSERT INTO cargos (orden_id, rfc_id, periodo_inicio, periodo_fin, subtotal, iva, total, estatus, creado_en) VALUES (?,?,?,?,?,?,?, 'emitido', NOW())")
+            ->execute([$ordenId, $orden['rfc_id'], $inicio->format('Y-m-d'), $fin->format('Y-m-d'), $subtotal, $iva, $total]);
+        $cargoId = (int)$pdo->lastInsertId();
+        $accionTxt = 'generado';
     }
 
-    /* =======================================================
-       7. Si NO existe cargo → CREAR UNO
-       ======================================================= */
-    $ins = $pdo->prepare("
-        INSERT INTO cargos
-            (orden_id, rfc_id, periodo_inicio, periodo_fin,
-             subtotal, iva, total, estatus, creado_en)
-        VALUES (?,?,?,?,?,?,?, 'emitido', NOW())
-    ");
-
-    $ins->execute([
-        $ordenId,
-        $orden['rfc_id'],
-        $inicio->format('Y-m-d'),
-        $fin->format('Y-m-d'),
-        $subtotal,
-        $iva,
-        $total
-    ]);
-
-    $cargoId = (int)$pdo->lastInsertId();
-
-    /* === Insertar sus items === */
-    $insPart = $pdo->prepare("
-        INSERT INTO cargo_items
-            (cargo_id, orden_item_id, concepto, monto_base, iva, total)
-        VALUES (?,?,?,?,?,?)
-    ");
-
+    $insPart = $pdo->prepare("INSERT INTO cargo_items (cargo_id, orden_item_id, concepto, monto_base, iva, total) VALUES (?,?,?,?,?,?)");
     foreach ($items as $r) {
-        $mBase = (float)$r['monto'];
-        $mIva  = round($mBase * 0.16, 2);
-
-        $insPart->execute([
-            $cargoId,
-            $r['id'],
-            $r['concepto'],
-            $mBase,
-            $mIva,
-            $mBase + $mIva
-        ]);
+        $m = (float)$r['monto'];
+        $iv = round($m * 0.16, 2);
+        $insPart->execute([$cargoId, $r['id'], $r['concepto'], $m, $iv, $m + $iv]);
     }
 
     $pdo->commit();
 
-    // --- NOTIFICACIONES (Nuevo) ---
-    enviar_notificaciones_cargo($pdo, $orden, $cargoId, $total, $listaServicios, $inicio->format('Y-m-d'), $fin->format('Y-m-d'), 'generado');
-
-    back("Cargo emitido correctamente", true);
-
-} catch (Throwable $e) {
-
-    if (isset($pdo) && $pdo->inTransaction()) {
-        $pdo->rollBack();
-    }
-
-    back("Error al emitir cargo: " . $e->getMessage(), false);
-}
-
-/**
- * Función auxiliar para enviar las notificaciones sin repetir código
- */
-function enviar_notificaciones_cargo($pdo, $orden, $cargoId, $total, $listaServicios, $fInicio, $fFin, $accionTxt) {
+    // =========================================================
+    // 6. ENVIAR NOTIFICACIONES (MANUAL Y SEGURO)
+    // =========================================================
     
-    // 1. Notificación Interna (Sistema/Pusher)
+    // Variables seguras
+    $clienteId = (int)$orden['cliente_id'];
+    $empresaName = $orden['empresa'] ?? 'Cliente';
+    $correoDest = $orden['correo'] ?? '';
+    $montoStr = number_format($total, 2);
+
+    // A) Guardar en BD (Tabla notificaciones)
+    $titulo = "Cargo $accionTxt";
+    $cuerpo = "Se ha $accionTxt el cargo de $empresaName por $$montoStr. Periodo: " . $inicio->format('d/m') . " al " . $fin->format('d/m');
+    
     try {
-        $usuarioIdActual = $_SESSION['user_id'] ?? $_SESSION['usuario_id'] ?? null;
-        $notifData = [
-            'tipo'       => 'sistema',
-            'canal'      => 'interna',
-            'titulo'     => "Cargo $accionTxt",
-            'cuerpo'     => "Se ha $accionTxt el cargo de {$orden['empresa']} por $" . number_format($total, 2),
-            'usuario_id' => $usuarioIdActual, 
-            'ref_tipo'   => 'pago', 
-            'ref_id'     => $cargoId,
-            'estado'     => 'pendiente'
-        ];
-        enviar_notificacion($pdo, $notifData, true);
+        $sqlN = "INSERT INTO notificaciones (cliente_id, tipo, canal, titulo, cuerpo, estado, creado_en, ref_tipo, ref_id) 
+                 VALUES (?, 'externa', 'sistema', ?, ?, 'pendiente', NOW(), 'cargo', ?)";
+        $pdo->prepare($sqlN)->execute([$clienteId, $titulo, $cuerpo, $cargoId]);
     } catch (Exception $e) {}
 
-    // 2. Correo al Cliente
-    if (!empty($orden['correo']) && function_exists('enviar_correo_sistema')) {
-        $asunto = "Aviso de Cargo - {$orden['empresa']}";
-        $totalFmt = number_format($total, 2);
-        
-        $html = "
-        <div style='font-family: Arial, sans-serif; color: #333; padding: 20px; border: 1px solid #eee; border-radius: 8px;'>
-            <h2 style='color: #fdd835;'>Hola, " . htmlspecialchars($orden['empresa']) . "</h2>
-            <p>Te informamos que se ha <strong>$accionTxt</strong> un cargo correspondiente a tus servicios.</p>
-            
-            <div style='background: #f9f9f9; padding: 15px; border-radius: 5px; margin: 15px 0;'>
-                <p><strong>Periodo:</strong> $fInicio al $fFin</p>
-                <p><strong>Total a Pagar:</strong> <span style='font-size: 1.2em; font-weight: bold;'>$ $totalFmt</span></p>
-                <hr>
-                <p><strong>Detalle:</strong></p>
-                $listaServicios
-            </div>
+    // B) PUSHER MANUAL (Sin depender de helpers)
+    if (defined('PUSHER_APP_KEY')) {
+        try {
+            $pusher = new Pusher\Pusher(PUSHER_APP_KEY, PUSHER_APP_SECRET, PUSHER_APP_ID, ['cluster' => PUSHER_APP_CLUSTER, 'useTLS' => true]);
 
-            <p>Puedes consultar el detalle completo ingresando a tu portal:</p>
-            <p>
-                <a href='http://localhost/Sistema-de-Saldos-y-Pagos-/Public/login.php' 
-                   style='background: #000; color: #fff; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;'>
-                   Ir a mi Portal
-                </a>
-            </p>
-            <p><small>Si ya realizaste tu pago, por favor haz caso omiso a este mensaje.</small></p>
-        </div>
-        ";
+            // 1. Canal NOTIFICACIONES (Campanita)
+            $pusher->trigger('notificaciones_cliente_' . $clienteId, 'nueva-notificacion', [
+                'titulo' => $titulo,
+                'cuerpo' => $cuerpo
+            ]);
 
-        enviar_correo_sistema($orden['correo'], $orden['empresa'], $asunto, $html);
+            // 2. Canal SALDO (Dashboard)
+            $stS = $pdo->prepare("SELECT COALESCE(SUM(total),0) FROM cargos JOIN ordenes o ON o.id=cargos.orden_id WHERE o.cliente_id=? AND estatus IN ('emitido','vencido','pendiente')");
+            $stS->execute([$clienteId]);
+            $saldoNuevo = (float)$stS->fetchColumn();
+
+            $pusher->trigger('cliente_' . $clienteId, 'actualizar-saldo', [
+                'nuevo_saldo' => $saldoNuevo
+            ]);
+
+        } catch (Exception $e) {
+            // Ignoramos error de Pusher para no detener el script
+        }
     }
+
+    // C) CORREO (Con Try-Catch para evitar el error fatal)
+    if ($correoDest && function_exists('enviar_correo_sistema')) {
+        try {
+            $html = "<p>Hola <strong>$empresaName</strong>,</p><p>$cuerpo</p><hr><ul>$listaHtml</ul>";
+            enviar_correo_sistema($correoDest, $empresaName, "Aviso de Cargo", $html);
+        } catch (Exception $e) {
+            // Si falla el correo, no hacemos nada (el usuario no verá el error)
+        }
+    }
+
+    back("Cargo $accionTxt con éxito", true);
+
+} catch (Throwable $e) {
+    if (isset($pdo) && $pdo->inTransaction()) $pdo->rollBack();
+    back("Error: " . $e->getMessage(), false);
 }
 ?>

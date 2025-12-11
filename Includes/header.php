@@ -8,155 +8,79 @@ if (!defined('BASE_URL')) {
   }
 }
 
-// ✅ 1. AGREGA LA CONEXIÓN A LA BASE DE DATOS AQUÍ
 require_once __DIR__ . '/../App/bd.php'; 
-
-// Obtener usuario actual
 require_once __DIR__ . '/../App/auth.php';
 require_once __DIR__ . '/../App/notifications.php';
-
-// ✅ Agrega esta línea si no la tienes, para asegurar que cargue la config
 require_once __DIR__ . '/../App/pusher_config.php';
 
-// ✅ 2. INICIALIZA LA VARIABLE $pdo
 $pdo = db();
-
-// 1. Recuperamos los datos del usuario logueado
 $currentUser = current_user();
 
-// 2. OBTENER ID (Lógica blindada)
-// Si current_user tiene ID, lo usamos (esto arreglará tu problema)
 if (!empty($currentUser['id'])) {
     $usuarioId = (int)$currentUser['id'];
-} 
-// Si no, intentamos buscar en la sesión directamente
-elseif (!empty($_SESSION['usuario_id'])) {
+} elseif (!empty($_SESSION['usuario_id'])) {
     $usuarioId = (int)$_SESSION['usuario_id'];
-} 
-else {
+} else {
     $usuarioId = 0;
 }
 
-// 3. Obtener Rol (intentamos del array, si no, de sesión, si no, guest)
 $usuarioRol = $currentUser['rol'] ?? $_SESSION['usuario_rol'] ?? 'guest';
-
-// 4. Datos visuales
 $userName = $currentUser['nombre'] ?? 'Usuario';
 $userInitial = mb_substr($userName, 0, 1, 'UTF-8');
-
-
 
 $fotoUsuario = '';
 if ($usuarioId > 0) {
     $stUser = $pdo->prepare("SELECT nombre, foto_url FROM usuarios WHERE id = ? LIMIT 1");
     $stUser->execute([$usuarioId]);
     $datosFrescos = $stUser->fetch(PDO::FETCH_ASSOC);
-    
     if ($datosFrescos) {
-        $userName    = $datosFrescos['nombre']; // Actualiza el nombre si cambió
-        $fotoUsuario = $datosFrescos['foto_url']; // Obtiene la foto real
+        $userName    = $datosFrescos['nombre'];
+        $fotoUsuario = $datosFrescos['foto_url'];
     }
 }
 
 // -------------------------------------------------------------------
-//  Cargar notificaciones para el header
+//  CARGAR NOTIFICACIONES
 // -------------------------------------------------------------------
-$notifCount      = 0;
-$notificaciones  = [];
+$notificaciones = [];
 
-if ($usuarioId !== null) {
-    $sql = "
-        SELECT id, titulo, cuerpo, estado, leida_en, creado_en
-        FROM notificaciones
-        WHERE (usuario_id = :uid OR usuario_id IS NULL)
-          AND estado = 'pendiente'
-        ORDER BY creado_en DESC
-        LIMIT 10
-    ";
-
-    $st = $pdo->prepare($sql);
-    $st->execute([':uid' => $usuarioId]);
-    $rows = $st->fetchAll(PDO::FETCH_ASSOC);
-
-    $ahora = new DateTimeImmutable('now');
-
-    foreach ($rows as $r) {
-        $creado = !empty($r['creado_en'])
-            ? new DateTimeImmutable($r['creado_en'])
-            : $ahora;
-
-        $diff = $ahora->diff($creado);
-
-        if     ($diff->d > 0) $hace = $diff->d . ' día(s)';
-        elseif ($diff->h > 0) $hace = $diff->h . ' h';
-        elseif ($diff->i > 0) $hace = $diff->i . ' min';
-        else                  $hace = 'hace un momento';
-
-        $notificaciones[] = [
-            'id'    => (int)$r['id'],
-            'texto' => $r['titulo'] . ' · ' .
-                       mb_strimwidth($r['cuerpo'] ?? '', 0, 90, '…', 'UTF-8'),
-            'hace'  => $hace,
-            'leida' => !empty($r['leida_en']),
-        ];
-
-        if (empty($r['leida_en'])) {
-            $notifCount++;
-        }
-    }
-}
-
-
-// Función helper para "hace 3 min", "hace 2 horas", etc.
+// Helper tiempo
 function tiempo_hace_es(?string $fecha): string {
     if (!$fecha) return '';
     $dt = new DateTime($fecha);
     $now = new DateTime();
     $diff = $now->diff($dt);
-
     if ($diff->y > 0) return 'hace '.$diff->y.' año(s)';
     if ($diff->m > 0) return 'hace '.$diff->m.' mes(es)';
     if ($diff->d > 0) return 'hace '.$diff->d.' día(s)';
-    if ($diff->h > 0) return 'hace '.$diff->h.' hora(s)';
-    if ($diff->i > 0) return 'hace '.$diff->i.' minuto(s)';
-    return 'hace unos segundos';
+    if ($diff->h > 0) return 'hace '.$diff->h.' h';
+    if ($diff->i > 0) return 'hace '.$diff->i.' min';
+    return 'hace un momento';
 }
 
 if ($usuarioId) {
-    // 1) cuántas pendientes (no leídas) tiene el usuario
-    $st = $pdo->prepare("
-        SELECT COUNT(*)
+    $stList = $pdo->prepare("
+        SELECT id, titulo, cuerpo, creado_en, leida_en, estado
         FROM notificaciones
-        WHERE canal = 'interno'
-          AND usuario_id = ?
-          AND leida_en IS NULL
-    ");
-    $st->execute([$usuarioId]);
-    $notifCount = (int)$st->fetchColumn();
-
-    // 2) últimas 10 notificaciones para el dropdown
-    $st = $pdo->prepare("
-        SELECT id, titulo, cuerpo, creado_en, leida_en
-        FROM notificaciones
-        WHERE canal = 'interno'
-          AND usuario_id = ?
+        WHERE tipo = 'interna'
+          AND (usuario_id = ? OR usuario_id IS NULL)
         ORDER BY creado_en DESC
         LIMIT 10
     ");
-    $st->execute([$usuarioId]);
-    $rows = $st->fetchAll(PDO::FETCH_ASSOC);
+    $stList->execute([$usuarioId]);
+    $rows = $stList->fetchAll(PDO::FETCH_ASSOC);
 
     foreach ($rows as $r) {
         $notificaciones[] = [
             'id'    => (int)$r['id'],
-            'texto' => $r['titulo'] ?: $r['cuerpo'],
+            'texto' => $r['titulo'] ?: mb_strimwidth($r['cuerpo'], 0, 50, '...'),
+            'cuerpo'=> mb_strimwidth($r['cuerpo'], 0, 80, '...'),
             'hace'  => tiempo_hace_es($r['creado_en']),
             'leida' => !empty($r['leida_en']),
+            'pendiente' => ($r['estado'] === 'pendiente' && empty($r['leida_en'])),
         ];
     }
 }
-
-
 ?>
 <!doctype html>
 <html lang="es">
@@ -169,222 +93,65 @@ if ($usuarioId) {
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
   <link href="./css/app.css?v=999" rel="stylesheet">
 
+  <!-- Script INLINE para ejecutar ANTES que todo -->
   <script>
-  /* Pasamos las variables de PHP a JS de forma segura */
   window.APP_USER = {
-    /* Usamos 0 si no hay ID, evitando errores de sintaxis */
     id: <?php echo (int)($usuarioId ?? 0); ?>,
     rol: "<?php echo htmlspecialchars($usuarioRol ?? 'guest'); ?>"
   };
-
-  /* Configuración de Pusher */
   window.PUSHER_CONFIG = {
     key: "<?php echo defined('PUSHER_APP_KEY') ? PUSHER_APP_KEY : ''; ?>",
     cluster: "<?php echo defined('PUSHER_APP_CLUSTER') ? PUSHER_APP_CLUSTER : ''; ?>"
   };
-</script>
+  
+  // Función para obtener notificaciones ocultas
+  function getNotifOcultas() {
+    const userId = window.APP_USER.id;
+    const key = 'notif_ocultas_' + userId;
+    const stored = localStorage.getItem(key);
+    return stored ? JSON.parse(stored) : [];
+  }
+  </script>
 </head>
 
 <style>
-/* Logo */
+/* Estilos Header */
 .navbar-brand img { height: 50px; }
-
-/* Botón usuario pill */
 .user-pill {
-  --bs-btn-color: #1a1a1a;
-  --bs-btn-bg: rgba(0,0,0,.08);
-  --bs-btn-border-color: transparent;
-  --bs-btn-hover-color: #000;
-  --bs-btn-hover-bg: #fdd835;
-  --bs-btn-hover-border-color: transparent;
-  transition: all .2s ease;
-  font-size: 0.9rem;
-  padding: 0.4rem 1rem;
+  --bs-btn-color: #1a1a1a; --bs-btn-bg: rgba(0,0,0,.08); --bs-btn-border-color: transparent;
+  --bs-btn-hover-color: #000; --bs-btn-hover-bg: #fdd835; --bs-btn-hover-border-color: transparent;
+  transition: all .2s ease; font-size: 0.9rem; padding: 0.4rem 1rem;
 }
-.user-pill:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(0,0,0,.1);
-}
+.user-pill:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,.1); }
 .user-pill .avatar-circle {
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: linear-gradient(135deg, #f39c12, #e74c3c);
-  color: white;
-  font-weight: 600;
-  font-size: 0.85rem;
+  width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  background: linear-gradient(135deg, #f39c12, #e74c3c); color: white; font-weight: 600; font-size: 0.85rem;
 }
+.user-menu { min-width: 200px !important; background: #fffbea; border-color: rgba(0,0,0,.1); }
+.user-menu .dropdown-item:hover { background: #fdd835; color: #000; }
 
-/* Dropdown usuario */
-.user-menu {
-  min-width: 200px !important;
-  background: #fffbea;
-  border-color: rgba(0,0,0,.1);
+/* Notificaciones */
+.notif-menu { min-width: 340px !important; max-height: 400px; overflow-y: auto; border-radius: 0.5rem; box-shadow: 0 4px 15px rgba(0,0,0,.15); }
+.notif-item { padding: 0.75rem 1rem; border-bottom: 1px solid #f0f0f0; transition: all .2s; position: relative; }
+.notif-item:hover { background: #fffde7; }
+.notif-item.oculta { display: none !important; }
+.btn-close-notif {
+    position: absolute; right: 10px; top: 10px;
+    font-size: 0.7rem; color: #999; cursor: pointer;
+    background: none; border: none; padding: 2px;
+    opacity: 0.5; transition: 0.2s; z-index: 10;
 }
-.user-menu .dropdown-item:hover {
-  background: #fdd835;
-  color: #000;
-}
+.btn-close-notif:hover { opacity: 1; color: #dc3545; transform: scale(1.2); }
 
-/* Campanita de notificaciones */
-.notif-bell {
-  position: relative;
-  background: rgba(0,0,0,.08);
-  border: none;
-  border-radius: 50%;
-  width: 42px;
-  height: 42px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all .2s ease;
-  color: #333;
-}
-.notif-bell:hover {
-  background: #fdd835;
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(0,0,0,.1);
-}
-.notif-bell::after {
-  display: none !important;
-}
-.notif-badge {
-  position: absolute;
-  top: -4px;
-  right: -4px;
-  background: #e74c3c;
-  color: white;
-  border-radius: 10px;
-  padding: 2px 6px;
-  font-size: 0.7rem;
-  font-weight: 600;
-  min-width: 20px;
-  text-align: center;
-}
-
-/* Menu de notificaciones - Desktop */
-.notif-menu {
-  min-width: 340px !important;
-  max-height: 400px;
-  overflow-y: auto;
-  background: white;
-  border-radius: 0.5rem;
-  box-shadow: 0 4px 12px rgba(0,0,0,.15);
-}
-
-.notif-item {
-  padding: 0.75rem 1rem;
-  border-bottom: 1px solid rgba(0,0,0,.05);
-  transition: background .2s;
-  cursor: pointer;
-}
-.notif-item:hover {
-  background: rgba(253, 216, 53, 0.1);
-}
-.notif-item.unread {
-  background: rgba(253, 216, 53, 0.05);
-}
-.notif-item.unread::before {
-  content: '';
-  width: 8px;
-  height: 8px;
-  background: #e74c3c;
-  border-radius: 50%;
-  display: inline-block;
-  margin-right: 8px;
-}
-
-/* Responsive para móvil */
 @media (max-width: 768px) {
-  .navbar-brand img {
-    height: 40px;
-  }
-  
-  /* Notificaciones en móvil - ancho ajustado */
-  .notif-menu {
-    min-width: 280px !important;
-    max-width: calc(100vw - 32px) !important;
-    max-height: 60vh;
-    right: -8px !important;
-    left: auto !important;
-  }
-  
-  .notif-item {
-    padding: 0.65rem 0.75rem;
-  }
-  
-  .notif-item .small {
-    font-size: 0.8rem !important;
-  }
-  
-  .notif-item .text-muted {
-    font-size: 0.7rem !important;
-  }
-  
-  /* Usuario en móvil */
-  .user-pill {
-    padding: 0.35rem 0.75rem;
-    font-size: 0.85rem;
-  }
-  
-  .user-pill .avatar-circle {
-    width: 28px;
-    height: 28px;
-    font-size: 0.75rem;
-  }
-  
-  .user-menu {
-    min-width: 180px !important;
-  }
-  
-  /* Botones de notificación y usuario */
-  .notif-bell {
-    width: 38px;
-    height: 38px;
-  }
-  
-  .notif-bell i {
-    font-size: 1.1rem;
-  }
-  
-  .notif-badge {
-    top: -2px;
-    right: -2px;
-    padding: 1px 5px;
-    font-size: 0.65rem;
-    min-width: 18px;
-  }
-
-}
-
-/* Para pantallas muy pequeñas */
-@media (max-width: 375px) {
-  .notif-menu {
-    min-width: 260px !important;
-    max-width: calc(100vw - 24px) !important;
-  }
-  
-  .notif-item {
-    padding: 0.5rem;
-  }
-}
-
-.notif-item.unread {
-  background-color: #f5f5f5;
-  border-left: 3px solid #0d6efd;
+  .notif-menu { min-width: 280px !important; max-width: calc(100vw - 32px) !important; right: -8px !important; }
 }
 </style>
 
 <body class="layout">
   <nav class="navbar topbar navbar-dark shadow-sm">
     <div class="container-fluid">
-      <button class="btn btn-link text-dark d-lg-none p-0 me-2"
-              type="button"
-              data-bs-toggle="offcanvas"
-              data-bs-target="#mobileSidebar">
+      <button class="btn btn-link text-dark d-lg-none p-0 me-2" type="button" data-bs-toggle="offcanvas" data-bs-target="#mobileSidebar">
         <i class="bi bi-list fs-2"></i>
       </button>
 
@@ -394,91 +161,63 @@ if ($usuarioId) {
 
       <div class="ms-auto d-flex align-items-center gap-2">
       
-    <!-- Campanita de notificaciones -->
-<li class="nav-item dropdown me-3">
-  <button
-      class="btn btn-link position-relative p-0 border-0"
-      type="button"
-      id="dropdownNotificaciones"
-      data-bs-toggle="dropdown"
-      data-bs-auto-close="outside"
-      aria-expanded="false">
-    <i class="bi bi-bell fs-5"></i>
+      <li class="nav-item dropdown me-3 list-unstyled">
+          <button class="btn btn-link position-relative p-0 border-0 text-dark" 
+                  type="button" id="dropdownNotificaciones" data-bs-toggle="dropdown" aria-expanded="false">
+            <i class="bi bi-bell fs-5"></i>
+            <!-- SIEMPRE OCULTO POR DEFECTO - JS lo mostrará si es necesario -->
+            <span id="notifCountBadge" class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger d-none" style="visibility: hidden;">
+                0
+            </span>
+          </button>
 
-    <?php if ($notifCount > 0): ?>
-      <span
-        id="notifCountBadge"
-        class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
-        <?= $notifCount ?>
-      </span>
-    <?php endif; ?>
-  </button>
+          <ul class="dropdown-menu dropdown-menu-end shadow notif-menu" aria-labelledby="dropdownNotificaciones">
+            <li class="px-3 py-2 border-bottom bg-light d-flex justify-content-between align-items-center">
+              <span class="fw-bold small text-uppercase text-muted">Notificaciones</span>
+            </li>
 
-  <ul class="dropdown-menu dropdown-menu-end shadow notif-menu"
-      aria-labelledby="dropdownNotificaciones">
-
-    <!-- Cabecera del dropdown -->
-    <li class="px-3 py-2 border-bottom bg-light">
-      <div class="d-flex justify-content-between align-items-center">
-        <span class="fw-semibold small">Notificaciones</span>
-        <?php if ($notifCount > 0): ?>
-          <span class="badge bg-danger rounded-pill"><?= $notifCount ?></span>
-        <?php endif; ?>
-      </div>
-    </li>
-
-    <!-- Lista de notificaciones -->
-    <?php if (empty($notificaciones)): ?>
-      <li class="text-center py-4 text-muted small">
-        <i class="bi bi-bell-slash d-block mb-2"
-           style="font-size: 2rem; opacity: 0.3;"></i>
-        No hay notificaciones
-      </li>
-    <?php else: ?>
-      <?php foreach ($notificaciones as $n): ?>
-        <li class="px-3 py-2 border-bottom small <?= $n['leida'] ? '' : 'bg-light' ?>">
-          <div class="fw-semibold mb-1" style="line-height: 1.3;">
-            <?= htmlspecialchars($n['texto'], ENT_QUOTES, 'UTF-8') ?>
-          </div>
-          <div class="text-muted" style="font-size: 0.75rem;">
-            <i class="bi bi-clock me-1"></i>
-            <?= htmlspecialchars($n['hace'], ENT_QUOTES, 'UTF-8') ?>
-          </div>
+            <div id="listaNotificaciones">
+                <?php if (empty($notificaciones)): ?>
+                  <li class="text-center py-5 text-muted small" id="noNotifMsg">
+                    <i class="bi bi-bell-slash d-block mb-2 fs-4 opacity-50"></i>
+                    Sin novedades
+                  </li>
+                <?php else: ?>
+                  <?php foreach ($notificaciones as $n): ?>
+                    <li class="notif-item px-3 py-2 border-bottom small <?= $n['leida'] ? 'bg-white' : 'bg-light' ?>" 
+                        id="notif-<?= $n['id'] ?>" 
+                        data-notif-id="<?= $n['id'] ?>"
+                        data-pendiente="<?= $n['pendiente'] ? '1' : '0' ?>">
+                        
+                      <button class="btn-close-notif" onclick="ocultarNotif(event, <?= $n['id'] ?>)" title="Ocultar">
+                          <i class="bi bi-x-lg"></i>
+                      </button>
+                      
+                      <div class="fw-semibold mb-1 pe-3"><?= htmlspecialchars($n['texto']) ?></div>
+                      <div class="text-muted" style="font-size: 0.75rem;"><?= htmlspecialchars($n['cuerpo']) ?></div>
+                      <div class="text-end mt-1 text-primary" style="font-size: 0.65rem;">
+                        <?= htmlspecialchars($n['hace']) ?>
+                      </div>
+                    </li>
+                  <?php endforeach; ?>
+                <?php endif; ?>
+            </div>
+          </ul>
         </li>
-      <?php endforeach; ?>
-    <?php endif; ?>
-
-    <!-- Footer del dropdown -->
-    <li class="text-center py-2 border-top bg-light">
-      <a href="#"
-         class="small text-decoration-none text-primary fw-semibold">
-        Ver todas <i class="bi bi-arrow-right"></i>
-      </a>
-    </li>
-  </ul>
-</li>
 
 
-
-        <!-- Usuario -->
         <div class="dropdown">
-          <button class="btn rounded-pill user-pill dropdown-toggle d-flex align-items-center gap-2"
-                  type="button" 
-                  id="dropdownUsuario"
-                  data-bs-toggle="dropdown"
-                  aria-expanded="false">
+          <button class="btn rounded-pill user-pill dropdown-toggle d-flex align-items-center gap-2" type="button" id="dropdownUsuario" data-bs-toggle="dropdown" aria-expanded="false">
             <div class="avatar-circle" style="overflow: hidden;">
               <?php if (!empty($fotoUsuario)): ?>
-                <img src="<?= htmlspecialchars($fotoUsuario) ?>?v=<?= time() ?>" 
-                     alt="User" 
-                     >
+                <img src="<?= htmlspecialchars($fotoUsuario) ?>?v=<?= time() ?>" alt="User" style="width:100%;height:100%;object-fit:cover;">
               <?php else: ?>
                 <?= strtoupper($userInitial) ?>
               <?php endif; ?>
             </div>
             <span class="d-none d-md-inline"><?= htmlspecialchars($userName) ?></span>
           </button>
-          <ul class="dropdown-menu dropdown-menu-end user-menu shadow" aria-labelledby="dropdownUsuario">
+          <ul class="dropdown-menu dropdown-menu-end user-menu shadow">
             <li><a class="dropdown-item" href="?m=usuarios"><i class="bi bi-person me-2"></i>Mi perfil</a></li>
             <li><hr class="dropdown-divider"></li>
             <li><a class="dropdown-item text-danger" href="logout.php"><i class="bi bi-box-arrow-right me-2"></i>Cerrar sesión</a></li>
@@ -488,7 +227,168 @@ if ($usuarioId) {
     </div>
   </nav>
 
-  <!-- ✅ Script de Bootstrap AL FINAL del body -->
+ <script>
+// =====================================================
+// SISTEMA DE OCULTACIÓN LOCAL DE NOTIFICACIONES
+// =====================================================
+
+// Guardar notificación oculta en localStorage
+function saveNotifOculta(notifId) {
+    const userId = window.APP_USER.id;
+    const key = `notif_ocultas_${userId}`;
+    let ocultas = getNotifOcultas();
+    
+    if (!ocultas.includes(notifId)) {
+        ocultas.push(notifId);
+        localStorage.setItem(key, JSON.stringify(ocultas));
+    }
+}
+
+// Filtrar notificaciones ocultas y actualizar contador
+function filtrarNotificacionesOcultas() {
+    const ocultas = getNotifOcultas();
+    let contadorVisible = 0;
+    
+    document.querySelectorAll('.notif-item').forEach(item => {
+        const notifId = parseInt(item.dataset.notifId);
+        const esPendiente = item.dataset.pendiente === '1';
+        
+        if (ocultas.includes(notifId)) {
+            item.classList.add('oculta');
+        } else {
+            // Contar las pendientes que NO están ocultas
+            if (esPendiente) {
+                contadorVisible++;
+            }
+        }
+    });
+    
+    // Actualizar el badge
+    actualizarBadge(contadorVisible);
+    
+    // Mostrar mensaje si no hay notificaciones visibles
+    verificarNotificacionesVisibles();
+}
+
+// Actualizar badge
+function actualizarBadge(count) {
+    const badge = document.getElementById('notifCountBadge');
+    if (!badge) return;
+    
+    if (count > 0) {
+        badge.innerText = count;
+        badge.classList.remove('d-none');
+        badge.style.visibility = 'visible';
+    } else {
+        badge.classList.add('d-none');
+        badge.style.visibility = 'hidden';
+    }
+}
+
+// Verificar si hay notificaciones visibles
+function verificarNotificacionesVisibles() {
+    const lista = document.getElementById('listaNotificaciones');
+    const notifVisibles = document.querySelectorAll('.notif-item:not(.oculta)').length;
+    
+    if (notifVisibles === 0) {
+        lista.innerHTML = `
+          <li class="text-center py-5 text-muted small" id="noNotifMsg">
+            <i class="bi bi-bell-slash d-block mb-2 fs-4 opacity-50"></i>
+            Sin novedades
+          </li>
+        `;
+    }
+}
+
+// Función para ocultar notificación
+function ocultarNotif(e, id) {
+    e.stopPropagation();
+    e.preventDefault();
+
+    const item = document.getElementById('notif-' + id);
+    if (!item) return;
+    
+    // A) GUARDAR en localStorage
+    saveNotifOculta(id);
+    
+    // B) VISUAL: Desaparecer con animación
+    item.style.opacity = '0';
+    item.style.transform = 'translateX(20px)';
+    
+    setTimeout(() => {
+        item.classList.add('oculta');
+        
+        // Verificar si quedan notificaciones visibles
+        verificarNotificacionesVisibles();
+        
+        // Actualizar el contador
+        const pendientesVisibles = document.querySelectorAll('.notif-item:not(.oculta)[data-pendiente="1"]').length;
+        actualizarBadge(pendientesVisibles);
+    }, 200);
+}
+
+// =====================================================
+// INICIALIZACIÓN INMEDIATA
+// =====================================================
+
+// Ejecutar filtrado INMEDIATAMENTE (antes de DOMContentLoaded)
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', filtrarNotificacionesOcultas);
+} else {
+    filtrarNotificacionesOcultas();
+}
+
+// Configurar eventos de la campanita
+document.addEventListener("DOMContentLoaded", function() {
+    const bellBtn = document.getElementById('dropdownNotificaciones');
+
+    if (bellBtn) {
+        bellBtn.addEventListener('show.bs.dropdown', function () {
+            const pendientesVisibles = document.querySelectorAll('.notif-item:not(.oculta)[data-pendiente="1"]').length;
+            
+            console.log('Campanita abierta. Notificaciones pendientes visibles:', pendientesVisibles);
+            
+            if (pendientesVisibles > 0) {
+                // A) VISUAL: Ocultar contador
+                const badge = document.getElementById('notifCountBadge');
+                if (badge) {
+                    badge.classList.add('d-none');
+                    badge.style.visibility = 'hidden';
+                }
+
+                // B) VISUAL: Quitar color amarillo
+                document.querySelectorAll('.notif-item.bg-light:not(.oculta)').forEach(el => {
+                    el.classList.remove('bg-light');
+                    el.classList.add('bg-white');
+                    el.dataset.pendiente = '0';
+                });
+
+                // C) BACKEND: Marcar como leídas en BD
+                const fd = new FormData();
+                fd.append('todas', 'true');
+                
+                console.log('Enviando petición para marcar como leídas...');
+                
+                fetch('/Sistema-de-Saldos-y-Pagos-/Public/api/notificaciones_leer.php', { 
+                    method: 'POST', 
+                    body: fd 
+                })
+                .then(response => response.json())
+                .then(data => {
+                    console.log('Respuesta del servidor:', data);
+                })
+                .catch(error => {
+                    console.error('Error al marcar notificaciones:', error);
+                });
+            }
+        });
+    }
+});
+</script>
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="https://js.pusher.com/8.2.0/pusher.min.js"></script>
+
+  <script src="/Sistema-de-Saldos-y-Pagos-/Public/js/notificaciones.js"></script>
+
 </body>
 </html>

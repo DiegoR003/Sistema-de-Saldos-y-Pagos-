@@ -7,20 +7,15 @@ require_once __DIR__ . '/pusher_config.php';
 
 /**
  * Función principal: Inserta una notificación en la BD y dispara Pusher en tiempo real.
- * * @param PDO $pdo Conexión a base de datos
- * @param array $data Datos de la notificación
- * @param bool $dispararPusher Si true, intenta enviar el evento a Pusher
- * @return int ID de la notificación insertada
  */
 function enviar_notificacion(PDO $pdo, array $data, bool $dispararPusher = true): int
 {
-    // Valores por defecto
     $defaults = [
-        'tipo'           => 'sistema',
-        'canal'          => 'interna',
+        'tipo'           => 'interna',
+        'canal'          => 'sistema',
         'titulo'         => '',
         'cuerpo'         => '',
-        'usuario_id'     => null, // NULL = Global (o para todos los admins si se maneja así)
+        'usuario_id'     => null, 
         'cliente_id'     => null,
         'correo_destino' => null,
         'ref_tipo'       => null,
@@ -31,51 +26,57 @@ function enviar_notificacion(PDO $pdo, array $data, bool $dispararPusher = true)
 
     $data = array_merge($defaults, $data);
 
-    // 1. Insertar en Base de Datos
-    $sql = "
-        INSERT INTO notificaciones
-          (tipo, canal, titulo, cuerpo,
-           usuario_id, cliente_id, correo_destino,
-           ref_tipo, ref_id, estado,
-           programada_en, creado_en)
-        VALUES
-          (:tipo, :canal, :titulo, :cuerpo,
-           :usuario_id, :cliente_id, :correo_destino,
-           :ref_tipo, :ref_id, :estado,
-           :programada_en, NOW())
-    ";
+    try {
+        // 1. Insertar en Base de Datos
+        $sql = "
+            INSERT INTO notificaciones
+              (tipo, canal, titulo, cuerpo,
+               usuario_id, cliente_id, correo_destino,
+               ref_tipo, ref_id, estado,
+               programada_en, creado_en)
+            VALUES
+              (:tipo, :canal, :titulo, :cuerpo,
+               :usuario_id, :cliente_id, :correo_destino,
+               :ref_tipo, :ref_id, :estado,
+               :programada_en, NOW())
+        ";
 
-    $st = $pdo->prepare($sql);
-    $st->execute([
-        ':tipo'           => $data['tipo'],
-        ':canal'          => $data['canal'],
-        ':titulo'         => $data['titulo'],
-        ':cuerpo'         => $data['cuerpo'],
-        ':usuario_id'     => $data['usuario_id'],
-        ':cliente_id'     => $data['cliente_id'],
-        ':correo_destino' => $data['correo_destino'],
-        ':ref_tipo'       => $data['ref_tipo'],
-        ':ref_id'         => $data['ref_id'],
-        ':estado'         => $data['estado'],
-        ':programada_en'  => $data['programada_en'],
-    ]);
-
-    $idNotif = (int)$pdo->lastInsertId();
-
-    // 2. Disparar evento a Pusher (Tiempo Real)
-    // Verificamos que exista la función disparadora para evitar errores
-    if ($dispararPusher && function_exists('pusher_trigger_notificacion')) {
-        pusher_trigger_notificacion([
-            'id'         => $idNotif,
-            'titulo'     => $data['titulo'],
-            'cuerpo'     => $data['cuerpo'],
-            'ref_tipo'   => $data['ref_tipo'],
-            'ref_id'     => $data['ref_id'],
-            'usuario_id' => $data['usuario_id'], // Importante: Saber a quién enviar
+        $st = $pdo->prepare($sql);
+        $st->execute([
+            ':tipo'           => $data['tipo'],
+            ':canal'          => $data['canal'],
+            ':titulo'         => $data['titulo'],
+            ':cuerpo'         => $data['cuerpo'],
+            ':usuario_id'     => $data['usuario_id'],
+            ':cliente_id'     => $data['cliente_id'],
+            ':correo_destino' => $data['correo_destino'],
+            ':ref_tipo'       => $data['ref_tipo'],
+            ':ref_id'         => $data['ref_id'],
+            ':estado'         => $data['estado'],
+            ':programada_en'  => $data['programada_en'],
         ]);
-    }
 
-    return $idNotif;
+        $idNotif = (int)$pdo->lastInsertId();
+
+        // 2. Disparar evento a Pusher
+        if ($dispararPusher) {
+            pusher_trigger_notificacion([
+                'id'         => $idNotif,
+                'titulo'     => $data['titulo'],
+                'cuerpo'     => $data['cuerpo'],
+                'ref_tipo'   => $data['ref_tipo'],
+                'ref_id'     => $data['ref_id'],
+                'usuario_id' => $data['usuario_id'],
+                'cliente_id' => $data['cliente_id']
+            ]);
+        }
+
+        return $idNotif;
+
+    } catch (Exception $e) {
+        error_log("Error insertando notificación: " . $e->getMessage());
+        return 0;
+    }
 }
 
 /**
@@ -84,27 +85,41 @@ function enviar_notificacion(PDO $pdo, array $data, bool $dispararPusher = true)
 function pusher_trigger_notificacion(array $notifData): void
 {
     try {
-        // Obtenemos la instancia de Pusher (definida en pusher_config.php)
         if (!function_exists('pusher_client')) {
+            error_log("pusher_client() no existe");
             return; 
         }
+        
         $pusher = pusher_client();
+        $canales = [];
 
-        // 1. Definir el canal
-        // Si tiene usuario_id, enviamos a su canal privado. Si es NULL, al global.
-        $canal = 'notificaciones_global';
+        // 1. Canal de Usuario (Admin/Operador)
         if (!empty($notifData['usuario_id'])) {
-            $canal = 'notificaciones_user_' . $notifData['usuario_id'];
+            $canales[] = 'notificaciones_user_' . $notifData['usuario_id'];
+        }
+        
+        // 2. Canal de Cliente (CRÍTICO - ESTO ES LO QUE FALTABA)
+        if (!empty($notifData['cliente_id'])) {
+            $canales[] = 'notificaciones_cliente_' . $notifData['cliente_id'];
         }
 
-        // 2. Definir el evento
+        // 3. Canal Global (Si no tiene destinatario específico)
+        if (empty($canales)) {
+            $canales[] = 'notificaciones_global';
+        }
+
         $evento = 'nueva-notificacion';
 
-        // 3. Disparar
-        $pusher->trigger($canal, $evento, $notifData);
+        // Log para debug (comentar en producción)
+        error_log("Pusher - Enviando a canales: " . implode(', ', $canales));
+        error_log("Pusher - Datos: " . json_encode($notifData));
+
+        // Enviar a todos los canales correspondientes
+        foreach ($canales as $canal) {
+            $pusher->trigger($canal, $evento, $notifData);
+        }
 
     } catch (Exception $e) {
-        // Si falla Pusher (internet, credenciales), no detenemos el sistema, solo registramos el error en logs
         error_log('Error Pusher: ' . $e->getMessage());
     }
 }
@@ -115,18 +130,16 @@ function pusher_trigger_notificacion(array $notifData): void
 function notificar_cotizacion_aprobada(PDO $pdo, array $cotizacion, ?int $usuarioIdActual = null): int
 {
     $data = [
-        'tipo'           => 'sistema',
-        'canal'          => 'interna',
+        'tipo'           => 'interna',
+        'canal'          => 'sistema',
         'titulo'         => 'Cotización aprobada',
         'cuerpo'         => 'La cotización ' . ($cotizacion['folio'] ?? '---') .
                             ' del cliente ' . ($cotizacion['cliente_nombre'] ?? 'Desconocido') .
                             ' ha sido aprobada.',
-        'usuario_id'     => $usuarioIdActual, // Notificar al usuario que hizo la acción (feedback) o NULL
+        'usuario_id'     => $usuarioIdActual,
         'cliente_id'     => $cotizacion['cliente_id'] ?? null,
-        'correo_destino' => $cotizacion['correo'] ?? null,
         'ref_tipo'       => 'cotizacion',
         'ref_id'         => $cotizacion['id'],
-        'estado'         => 'pendiente',
     ];
 
     return enviar_notificacion($pdo, $data, true);
@@ -138,18 +151,16 @@ function notificar_cotizacion_aprobada(PDO $pdo, array $cotizacion, ?int $usuari
 function notificar_cotizacion_rechazada(PDO $pdo, array $cotizacion, ?int $usuarioIdActual = null): int
 {
     $data = [
-        'tipo'           => 'sistema',
-        'canal'          => 'interna',
+        'tipo'           => 'interna',
+        'canal'          => 'sistema',
         'titulo'         => 'Cotización rechazada',
         'cuerpo'         => 'La cotización ' . ($cotizacion['folio'] ?? '---') .
                             ' del cliente ' . ($cotizacion['cliente_nombre'] ?? 'Desconocido') .
                             ' ha sido rechazada.',
         'usuario_id'     => $usuarioIdActual,
         'cliente_id'     => $cotizacion['cliente_id'] ?? null,
-        'correo_destino' => $cotizacion['correo'] ?? null,
         'ref_tipo'       => 'cotizacion',
         'ref_id'         => $cotizacion['id'],
-        'estado'         => 'pendiente',
     ];
 
     return enviar_notificacion($pdo, $data, true);
@@ -157,19 +168,15 @@ function notificar_cotizacion_rechazada(PDO $pdo, array $cotizacion, ?int $usuar
 
 /**
  * Helper: Notificación de NUEVA cotización recibida.
- * Se envía a todos los usuarios con rol 'admin' u 'operador'.
  */
 function notificar_nueva_cotizacion(PDO $pdo, array $cotizacion): int
 {
-    // 1. Datos del mensaje
     $cliente = $cotizacion['empresa'] ?? 'Cliente web';
     $total   = number_format((float)($cotizacion['total'] ?? 0), 2);
     
     $titulo  = 'Nueva cotización recibida';
     $cuerpo  = "Has recibido una nueva cotización de {$cliente} por \${$total}.";
 
-    // 2. Obtener IDs de usuarios que sean 'admin' u 'operador'
-    // Asegúrate que tu tabla de roles tenga los nombres 'admin' y 'operador'
     $sql = "
         SELECT DISTINCT u.id
         FROM usuarios u
@@ -184,25 +191,85 @@ function notificar_nueva_cotizacion(PDO $pdo, array $cotizacion): int
 
     $enviados = 0;
 
-    // 3. Enviar notificación individual a cada destinatario encontrado
     foreach ($destinatarios as $uid) {
         $data = [
-            'tipo'           => 'sistema',
-            'canal'          => 'interna',
+            'tipo'           => 'interna',
+            'canal'          => 'sistema',
             'titulo'         => $titulo,
             'cuerpo'         => $cuerpo,
-            'usuario_id'     => $uid, // ID específico del admin/operador
-            'cliente_id'     => null,
-            'correo_destino' => null,
+            'usuario_id'     => $uid,
             'ref_tipo'       => 'cotizacion',
             'ref_id'         => $cotizacion['id'],
-            'estado'         => 'pendiente',
         ];
 
-        // Enviamos a BD y disparamos Pusher para este usuario
         enviar_notificacion($pdo, $data, true);
         $enviados++;
     }
 
     return $enviados;
+}
+
+/**
+ * Helper: Notificación de NUEVO CARGO generado (Para Cliente y Admin).
+ */
+function notificar_nuevo_cargo(PDO $pdo, array $datos): void
+{
+    // 1. Datos necesarios
+    $clienteId = (int)$datos['cliente_id'];
+    $empresa   = $datos['empresa'] ?? 'Cliente';
+    $monto     = $datos['monto'] ?? 0;
+    $montoFmt  = number_format((float)$monto, 2);
+    $periodo   = $datos['periodo'] ?? '';
+    $cargoId   = (int)$datos['cargo_id'];
+    $accion    = $datos['accion'] ?? 'generado';
+
+    // Log para debug
+    error_log("notificar_nuevo_cargo - Cliente ID: $clienteId, Monto: $montoFmt");
+
+    // ---------------------------------------------------
+    // A) NOTIFICACIÓN AL CLIENTE (Campanita + Pusher)
+    // ---------------------------------------------------
+    $tituloCli = "Nuevo Cargo: $$montoFmt";
+    $cuerpoCli = "Se ha $accion tu cargo del periodo $periodo. Vence pronto.";
+
+    $dataCliente = [
+        'tipo'       => 'externa', // IMPORTANTE: tipo 'externa' para clientes
+        'canal'      => 'sistema',
+        'titulo'     => $tituloCli,
+        'cuerpo'     => $cuerpoCli,
+        'cliente_id' => $clienteId, // CRÍTICO: Esto dispara a 'notificaciones_cliente_ID'
+        'usuario_id' => null, // NULL para que no vaya a usuarios admin
+        'ref_tipo'   => 'cargo',
+        'ref_id'     => $cargoId,
+        'estado'     => 'pendiente'
+    ];
+    
+    $notifId = enviar_notificacion($pdo, $dataCliente, true);
+    error_log("Notificación cliente enviada - ID: $notifId");
+
+    // ---------------------------------------------------
+    // B) NOTIFICACIÓN AL ADMIN (Campanita Interna)
+    // ---------------------------------------------------
+    $sqlAdmins = "
+        SELECT DISTINCT u.id 
+        FROM usuarios u
+        JOIN usuario_rol ur ON ur.usuario_id = u.id
+        JOIN roles r ON r.id = ur.rol_id
+        WHERE r.nombre IN ('admin', 'operador') AND u.activo = 1
+    ";
+    $admins = $pdo->query($sqlAdmins)->fetchAll(PDO::FETCH_COLUMN);
+
+    foreach ($admins as $uid) {
+        $dataAdmin = [
+            'tipo'       => 'interna',
+            'canal'      => 'sistema',
+            'titulo'     => "Cargo $accion ($empresa)",
+            'cuerpo'     => "Monto: $$montoFmt. Periodo: $periodo",
+            'usuario_id' => $uid,
+            'cliente_id' => null, // NULL para que no vaya a cliente
+            'ref_tipo'   => 'cargo',
+            'ref_id'     => $cargoId
+        ];
+        enviar_notificacion($pdo, $dataAdmin, true);
+    }
 }

@@ -1,137 +1,282 @@
 // ============================================================
-  // 🔔 CONFIGURACIÓN DE SONIDO
-  // ============================================================
-  // Opción A: Si tienes el archivo en tu carpeta (Recomendado):
-  // const audioNotif = new Audio('/Sistema-de-Saldos-y-Pagos-/Public/assets/sounds/notification.mp3');
-  
-  // Opción B: Sonido de prueba online (Úsalo para probar ahorita):
- // const audioNotif = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
-  // ============================================================
-
-
+// 🔔 SISTEMA DE NOTIFICACIONES EN TIEMPO REAL
+// ============================================================
 
 (function () {
-  // 1. Verificamos que existan las variables globales definidas en header.php
+  'use strict';
+
+  // ============================================================
+  // 📢 CONFIGURACIÓN DE SONIDO
+  // ============================================================
+  const audioNotif = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
+  audioNotif.volume = 0.5; // Volumen al 50%
+  
+  // Desbloquear audio con la primera interacción del usuario
+  let audioDesbloqueado = false;
+  document.addEventListener('click', function desbloquearAudio() {
+    if (!audioDesbloqueado) {
+      audioNotif.play().then(() => audioNotif.pause()).catch(() => {});
+      audioDesbloqueado = true;
+    }
+  }, { once: true });
+
+  // ============================================================
+  // 🔴 PUNTO ROJO EN PESTAÑA (Favicon dinámico)
+  // ============================================================
+  const faviconOriginal = document.querySelector('link[rel="icon"]')?.href || '/assets/Banana.png';
+  let faviconConPunto = null;
+
+  // Crear favicon con punto rojo
+  function crearFaviconConPunto() {
+    const canvas = document.createElement('canvas');
+    canvas.width = 32;
+    canvas.height = 32;
+    const ctx = canvas.getContext('2d');
+    
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = function() {
+      // Dibujar el favicon original
+      ctx.drawImage(img, 0, 0, 32, 32);
+      
+      // Dibujar punto rojo en la esquina superior derecha
+      ctx.fillStyle = '#FF0000';
+      ctx.beginPath();
+      ctx.arc(24, 8, 6, 0, 2 * Math.PI);
+      ctx.fill();
+      
+      // Borde blanco para que resalte
+      ctx.strokeStyle = '#FFFFFF';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      
+      faviconConPunto = canvas.toDataURL('image/png');
+    };
+    img.src = faviconOriginal;
+  }
+
+  function actualizarFavicon(mostrarPunto) {
+    const link = document.querySelector('link[rel="icon"]') || document.createElement('link');
+    link.rel = 'icon';
+    link.href = mostrarPunto && faviconConPunto ? faviconConPunto : faviconOriginal;
+    
+    if (!document.querySelector('link[rel="icon"]')) {
+      document.head.appendChild(link);
+    }
+  }
+
+  // ============================================================
+  // 🎯 INICIALIZACIÓN
+  // ============================================================
+  
+  // Verificar configuración
   if (!window.APP_USER || !window.PUSHER_CONFIG || !APP_USER.id) {
-    console.warn('Pusher: Faltan configuraciones de usuario.');
+    console.warn('❌ Pusher: Faltan configuraciones de usuario.');
     return;
   }
 
-  const { id } = APP_USER; // Solo necesitamos el ID, ya que el PHP se encarga de los roles
+  const { id } = APP_USER;
   const { key, cluster } = PUSHER_CONFIG;
 
-  // 2. Inicializar Pusher
+  // Prevenir múltiples inicializaciones
+  if (window.pusherInitialized) {
+    console.log('⚠️ Pusher ya está inicializado, saltando...');
+    return;
+  }
+  window.pusherInitialized = true;
+
+  // Inicializar Pusher
   const pusher = new Pusher(key, {
     cluster: cluster,
     forceTLS: true
   });
 
-  // 3. Suscribirse al canal CORRECTO (El mismo que pusimos en notifications.php)
-  const channelName = 'notificaciones_user_' + id;
+  const channelName = `notificaciones_user_${id}`;
   const channel = pusher.subscribe(channelName);
   
   console.log('📡 Pusher conectado. Escuchando canal:', channelName);
 
-  // Referencias al DOM
+  // Crear favicon con punto
+  crearFaviconConPunto();
+
+  // ============================================================
+  // 📌 REFERENCIAS AL DOM
+  // ============================================================
   const badge = document.getElementById('notifCountBadge');
   const btnBell = document.getElementById('dropdownNotificaciones');
-  const list  = document.querySelector('.notif-menu'); // Ajustado para buscar por clase si ID falla
+  const listaNotificaciones = document.getElementById('listaNotificaciones');
 
-  // Función para actualizar el contador rojo
-  function incrementCounter() {
-    // Si ya existe el badge, le sumamos 1
-    if (badge) {
-      let current = parseInt(badge.textContent || '0', 10);
-      badge.textContent = current + 1;
-      badge.classList.remove('d-none');
-    } else if (btnBell) {
-      // Si no existe, lo creamos
-      const newBadge = document.createElement('span');
-      newBadge.id = 'notifCountBadge';
-      newBadge.className = 'position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger';
-      newBadge.innerText = '1';
-      btnBell.appendChild(newBadge);
-    }
+  // ============================================================
+  // 🔢 FUNCIÓN: Incrementar contador
+  // ============================================================
+  function incrementarContador() {
+    if (!badge) return;
+    
+    // Obtener notificaciones ocultas
+    const ocultas = getNotifOcultas();
+    
+    // Contar solo las visibles y pendientes
+    const pendientesVisibles = document.querySelectorAll('.notif-item:not(.oculta)[data-pendiente="1"]').length;
+    const nuevoConteo = pendientesVisibles + 1;
+    
+    badge.textContent = nuevoConteo;
+    badge.classList.remove('d-none');
+    badge.style.visibility = 'visible';
+    
+    // Activar punto rojo en favicon
+    actualizarFavicon(true);
   }
 
-  // Función para agregar la notificación a la lista visualmente
-  function prependNotification(n) {
-    if (!list) return;
+  // ============================================================
+  // ➕ FUNCIÓN: Agregar notificación a la lista
+  // ============================================================
+  function agregarNotificacionALista(n) {
+    if (!listaNotificaciones) return;
 
     // Remover mensaje de "vacío" si existe
-    const emptyMsg = list.querySelector('.text-center.text-muted');
+    const emptyMsg = document.getElementById('noNotifMsg');
     if (emptyMsg) emptyMsg.remove();
 
-    // Crear el elemento LI
+    const notifId = n.id || Date.now();
+    const texto = n.titulo || n.texto || 'Nueva notificación';
+    const cuerpo = n.cuerpo || '';
+
+    // Verificar si la notificación ya está oculta
+    const ocultas = getNotifOcultas();
+    const estaOculta = ocultas.includes(notifId);
+
     const li = document.createElement('li');
-    li.className = 'px-3 py-2 border-bottom small bg-light'; // Estilo "no leído"
-    
-    const texto = n.texto || n.titulo || n.cuerpo || 'Nueva notificación';
+    li.className = `notif-item px-3 py-2 border-bottom small bg-light ${estaOculta ? 'oculta' : ''}`;
+    li.id = `notif-${notifId}`;
+    li.dataset.notifId = notifId;
+    li.dataset.pendiente = '1';
     
     li.innerHTML = `
-      <div class="fw-semibold mb-1" style="line-height: 1.3;">
-        ${texto}
-      </div>
-      <div class="text-muted" style="font-size: 0.75rem;">
-        <i class="bi bi-clock me-1"></i> Justo ahora
+      <button class="btn-close-notif" onclick="ocultarNotif(event, ${notifId})" title="Ocultar">
+        <i class="bi bi-x-lg"></i>
+      </button>
+      
+      <div class="fw-semibold mb-1 pe-3">${texto}</div>
+      <div class="text-muted" style="font-size: 0.75rem;">${cuerpo}</div>
+      <div class="text-end mt-1 text-primary" style="font-size: 0.65rem;">
+        Justo ahora
       </div>
     `;
 
-    // Insertar justo después del encabezado (el primer li)
-    const header = list.querySelector('li:first-child');
-    if (header) {
-      header.insertAdjacentElement('afterend', li);
+    // Insertar al inicio de la lista (después del header)
+    const primerItem = listaNotificaciones.querySelector('.notif-item');
+    if (primerItem) {
+      primerItem.parentNode.insertBefore(li, primerItem);
     } else {
-      list.prepend(li);
+      listaNotificaciones.appendChild(li);
     }
   }
 
-  // Función para mostrar Toast flotante
-  function showToast(n) {
+  // ============================================================
+  // 🍞 FUNCIÓN: Mostrar Toast flotante
+  // ============================================================
+  function mostrarToast(n) {
     const titulo = n.titulo || 'Notificación';
     const cuerpo = n.cuerpo || n.texto || '';
 
+    // Remover toasts anteriores
+    document.querySelectorAll('.toast-notification').forEach(t => t.remove());
+
     const toastHtml = `
-    <div class="toast-container position-fixed bottom-0 end-0 p-3" style="z-index: 9999">
-      <div class="toast show bg-white" role="alert" aria-live="assertive" aria-atomic="true">
-        <div class="toast-header">
-          <strong class="me-auto text-primary">Banana Group</strong>
-          <small>Ahora</small>
-          <button type="button" class="btn-close" data-bs-dismiss="toast"></button>
-        </div>
-        <div class="toast-body">
-          <strong>${titulo}</strong><br>${cuerpo}
+      <div class="toast-notification position-fixed bottom-0 end-0 p-3" style="z-index: 9999">
+        <div class="toast show bg-white shadow-lg" role="alert">
+          <div class="toast-header bg-primary text-white">
+            <i class="bi bi-bell-fill me-2"></i>
+            <strong class="me-auto">Banana Group</strong>
+            <small>Ahora</small>
+            <button type="button" class="btn-close btn-close-white" onclick="this.closest('.toast-notification').remove()"></button>
+          </div>
+          <div class="toast-body">
+            <strong>${titulo}</strong><br>
+            <span class="text-muted">${cuerpo}</span>
+          </div>
         </div>
       </div>
-    </div>`;
+    `;
     
     document.body.insertAdjacentHTML('beforeend', toastHtml);
     
-    // Auto-eliminar a los 5 segundos
+    // Auto-eliminar después de 5 segundos
     setTimeout(() => {
-        const t = document.querySelector('.toast-container:last-child');
-        if(t) t.remove();
+      const toast = document.querySelector('.toast-notification');
+      if (toast) {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateX(400px)';
+        setTimeout(() => toast.remove(), 300);
+      }
     }, 5000);
   }
 
-  // Manejador del evento
-  function handleNotification(data) {
-    console.log('🔔 Notificación recibida:', data);
-    const n = (typeof data === 'string') ? JSON.parse(data) : data;
+  // ============================================================
+  // 🔊 FUNCIÓN: Reproducir sonido
+  // ============================================================
+  function reproducirSonido() {
+    // Reiniciar el audio si ya estaba sonando
+    audioNotif.currentTime = 0;
     
-    prependNotification(n);
-    incrementCounter();
-    showToast(n);
+    audioNotif.play().catch(error => {
+      console.warn("🔇 El navegador bloqueó el sonido (requiere interacción previa):", error);
+    });
   }
 
-  // 2. 🔊 REPRODUCIR SONIDO
-    // Usamos catch porque los navegadores bloquean el sonido si el usuario 
-    // no ha interactuado con la página (hecho al menos un clic en cualquier lado).
-    audioNotif.play().catch(error => {
-        console.warn("El navegador bloqueó el sonido automático (requiere interacción previa):", error);
-    });
-  
+  // ============================================================
+  // 📥 MANEJADOR PRINCIPAL: Nueva notificación
+  // ============================================================
+  function manejarNuevaNotificacion(data) {
+    console.log('🔔 Notificación recibida:', data);
+    
+    const notificacion = (typeof data === 'string') ? JSON.parse(data) : data;
+    
+    // 1. Agregar a la lista
+    agregarNotificacionALista(notificacion);
+    
+    // 2. Incrementar contador
+    incrementarContador();
+    
+    // 3. Mostrar toast
+    mostrarToast(notificacion);
+    
+    // 4. Reproducir sonido
+    reproducirSonido();
+  }
 
-  // 4. Escuchar el evento
-  channel.bind('nueva-notificacion', handleNotification);
+  // ============================================================
+  // 🎧 ESCUCHAR EVENTOS DE PUSHER
+  // ============================================================
+  channel.bind('nueva-notificacion', manejarNuevaNotificacion);
+
+  // Confirmar suscripción
+  channel.bind('pusher:subscription_succeeded', function() {
+    console.log('✅ Suscripción exitosa al canal:', channelName);
+  });
+
+  // Manejar errores
+  channel.bind('pusher:subscription_error', function(error) {
+    console.error('❌ Error en la suscripción:', error);
+  });
+
+  // ============================================================
+  // 👁️ QUITAR PUNTO ROJO AL ABRIR NOTIFICACIONES
+  // ============================================================
+  if (btnBell) {
+    btnBell.addEventListener('show.bs.dropdown', function() {
+      // Quitar punto rojo del favicon
+      actualizarFavicon(false);
+    });
+  }
+
+  // También quitar punto rojo cuando la ventana recupera el foco
+  window.addEventListener('focus', function() {
+    const badgeVisible = badge && !badge.classList.contains('d-none');
+    if (!badgeVisible) {
+      actualizarFavicon(false);
+    }
+  });
+
+  console.log('✅ Sistema de notificaciones inicializado correctamente');
 })();

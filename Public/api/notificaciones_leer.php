@@ -1,43 +1,51 @@
 <?php
-// Public/api/notificaciones_leer.php
+// Public/api/notificacion_leer.php
 declare(strict_types=1);
-
-// 1) Iniciar sesión SIEMPRE
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
-
-// 2) Comprobar usuario logueado
-//   Ajusta aquí si en tu login usas otros nombres de variables
-$usuarioId = 0;
-
-// soporta ambos nombres por si en alguna parte usaste uno u otro
-if (isset($_SESSION['usuario_id']) && (int)$_SESSION['usuario_id'] > 0) {
-    $usuarioId = (int)$_SESSION['usuario_id'];
-} elseif (isset($_SESSION['user_id']) && (int)$_SESSION['user_id'] > 0) {
-    $usuarioId = (int)$_SESSION['user_id'];
-}
-
-if ($usuarioId <= 0) {
-    http_response_code(401);
-    header('Content-Type: application/json; charset=utf-8');
-    echo json_encode(['ok' => false, 'err' => 'No autenticado']);
-    exit;
-}
-
-// 3) Conexión a BD
 require_once __DIR__ . '/../../App/bd.php';
+require_once __DIR__ . '/../../App/auth.php';
+
+header('Content-Type: application/json');
+
+if (session_status() === PHP_SESSION_NONE) session_start();
+
+// 1. Validar sesión
+$u = function_exists('current_user') ? current_user() : null;
+if (!$u || empty($u['id'])) { 
+    echo json_encode(['ok'=>false, 'msg'=>'No sesión']); 
+    exit; 
+}
+
 $pdo = db();
+$userId = (int)$u['id'];
 
-// 4) Marcar notificaciones como leídas
-$st = $pdo->prepare("
-    UPDATE notificaciones
-    SET leida_en = NOW()
-    WHERE usuario_id = ?
-      AND leida_en IS NULL
-");
-$st->execute([$usuarioId]);
+// 2. Recibir parámetros
+$id = isset($_POST['id']) ? (int)$_POST['id'] : 0;
+$marcarTodas = isset($_POST['todas']) && $_POST['todas'] === 'true';
 
-// 5) Respuesta OK
-header('Content-Type: application/json; charset=utf-8');
-echo json_encode(['ok' => true]);
+try {
+    if ($marcarTodas) {
+        // OPCIÓN A: Marcar TODAS como leídas (Borra el contador rojo de golpe)
+        // Afecta a las propias ($userId) y a las globales internas (usuario_id NULL)
+        $sql = "UPDATE notificaciones 
+                SET estado = 'leida', leida_en = NOW() 
+                WHERE leida_en IS NULL 
+                AND (usuario_id = ? OR (tipo = 'interna' AND usuario_id IS NULL))";
+        $st = $pdo->prepare($sql);
+        $st->execute([$userId]);
+        
+    } elseif ($id > 0) {
+        // OPCIÓN B: Marcar UNA sola (cuando se hace clic en la X)
+        $sql = "UPDATE notificaciones 
+                SET estado = 'leida', leida_en = NOW() 
+                WHERE id = ? 
+                AND leida_en IS NULL
+                AND (usuario_id = ? OR (tipo = 'interna' AND usuario_id IS NULL))";
+        $st = $pdo->prepare($sql);
+        $st->execute([$id, $userId]);
+    }
+
+    echo json_encode(['ok'=>true]);
+
+} catch (Exception $e) {
+    echo json_encode(['ok'=>false, 'err'=>$e->getMessage()]);
+}

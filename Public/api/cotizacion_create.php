@@ -2,6 +2,7 @@
 // Public/api/cotizacion_create.php
 require_once __DIR__ . '/../../App/bd.php';
 require_once __DIR__ . '/../../App/notifications.php';
+require_once __DIR__ . '/../../App/pusher_config.php';
 
 // ✅ 1. INCLUIR EL MAILER (Si existe)
 if (file_exists(__DIR__ . '/../../App/mailer.php')) {

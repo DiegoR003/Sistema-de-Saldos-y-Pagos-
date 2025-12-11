@@ -1,4 +1,4 @@
-<?php require_once __DIR__ . '/../Includes/chat.php'; ?>
+ 
  
  <!-- Bootstrap JS (bundle con Popper) -->
     <script

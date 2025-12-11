@@ -5,6 +5,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/../App/bd.php';
 require_once __DIR__ . '/../Includes/footer.php'; 
 
+
 // Usa la utilidad si existe; si no, define un fallback seguro
 if (file_exists(__DIR__ . '/../App/date_utils.php')) {
   require_once __DIR__ . '/../App/date_utils.php';
