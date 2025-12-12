@@ -86,6 +86,12 @@ function folio($id){ return 'COT-'.str_pad((string)$id,5,'0',STR_PAD_LEFT); }
 
 /* -------- QS base para paginación -------- */
 $qs = $_GET; unset($qs['p']);
+
+
+// Copiamos los parámetros GET actuales para pasarlos al exportador
+    $queryParams = $_GET;
+    unset($queryParams['m']); // Quitamos el modulo para llamar a la API directo
+    $queryString = http_build_query($queryParams);
 ?>
 <!-- ==== ESTILOS DEL MÓDULO ==== -->
 <style>
@@ -127,9 +133,19 @@ $qs = $_GET; unset($qs['p']);
       <div class="dropdown">
         <button class="btn btn-light border dropdown-toggle" data-bs-toggle="dropdown" type="button">Exportar</button>
         <ul class="dropdown-menu dropdown-menu-end">
-          <li><a class="dropdown-item" href="#">Excel (.xlsx)</a></li>
-          <li><a class="dropdown-item" href="#">PDF</a></li>
-        </ul>
+  <li>
+      <a class="dropdown-item" target="_blank" 
+         href="/Sistema-de-Saldos-y-Pagos-/Public/api/cotizaciones_export_excel.php?<?= $queryString ?>">
+         <i class="bi bi-file-earmark-spreadsheet me-2 text-success"></i> Excel (.xls)
+      </a>
+  </li>
+  <li>
+      <a class="dropdown-item" target="_blank" 
+         href="/Sistema-de-Saldos-y-Pagos-/Public/api/cotizaciones_export_pdf.php?<?= $queryString ?>">
+         <i class="bi bi-file-earmark-pdf me-2 text-danger"></i> PDF
+      </a>
+  </li>
+</ul>
       </div>
       <!-- <a class="btn btn-primary btn-sm" href="?m=cotizaciones_nueva">
         <i class="bi bi-plus-lg me-1"></i> Nueva Cotización
@@ -220,21 +236,31 @@ $qs = $_GET; unset($qs['p']);
                     <button class="btn btn-sm btn-danger">Rechazar</button>
                   </form>-->
                 <?php endif; ?>
-                <button class="btn btn-sm btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown">Más</button>
+              <button class="btn btn-sm btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown">Más</button>
                 <ul class="dropdown-menu dropdown-menu-end">
                   <li>
-        <a class="dropdown-item" 
-           href="/Sistema-de-Saldos-y-Pagos-/Public/api/cotizacion_pdf.php?id=<?= $id ?>" 
-           target="_blank">
-          <i class="bi bi-file-earmark-pdf-fill text-danger me-2"></i>Descargar PDF
-        </a>
-      </li>
-      <li>
-    <button class="dropdown-item" type="button" 
-            onclick="enviarCotizacion(<?= $id ?>, '<?= htmlspecialchars($r['empresa'], ENT_QUOTES) ?>')">
-        <i class="bi bi-envelope-fill text-primary me-2"></i>Enviar Cotización
-    </button>
-</li>
+                    <a class="dropdown-item" href="/Sistema-de-Saldos-y-Pagos-/Public/api/cotizacion_pdf.php?id=<?= $id ?>" target="_blank">
+                      <i class="bi bi-file-earmark-pdf-fill text-danger me-2"></i>Descargar PDF
+                    </a>
+                  </li>
+                  <li>
+                    <button class="dropdown-item" type="button" onclick="enviarCotizacion(<?= $id ?>, '<?= htmlspecialchars($r['empresa'], ENT_QUOTES) ?>')">
+                        <i class="bi bi-envelope-fill text-primary me-2"></i>Enviar Cotización
+                    </button>
+                  </li>
+
+                  <?php if (isset($_SESSION['user_rol']) && $_SESSION['user_rol'] === 'admin'): ?>
+  <li><hr class="dropdown-divider"></li>
+  <li>
+    <form action="/Sistema-de-Saldos-y-Pagos-/Public/api/cotizacion_eliminar.php" method="POST" class="d-block"
+          onsubmit="confirmarAccion(event, '¿Eliminar cotización?', 'Se borrará permanentemente y no podrás recuperarla.', 'Sí, eliminar', '#dc3545')">
+        <input type="hidden" name="id" value="<?= $id ?>">
+        <button type="submit" class="dropdown-item text-danger">
+            <i class="bi bi-trash-fill me-2"></i>Eliminar
+        </button>
+    </form>
+  </li>
+<?php endif; ?>
                 </ul>
               </div>
             </td>
@@ -401,6 +427,8 @@ $qs = $_GET; unset($qs['p']);
     <button class="btn btn-outline-danger" id="btnRej" disabled>Rechazar</button>
   </form>
 </div>
+
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <script>
 (function(){
   const BASE = '/Sistema-de-Saldos-y-Pagos-/Public/api';
@@ -921,6 +949,28 @@ function enviarCotizacion(id, cliente) {
             }
         }
     });
+}
+</script>
+
+<script>
+function confirmarAccion(event, titulo, texto, btnTexto, colorBtn) {
+  event.preventDefault(); 
+  const form = event.target;
+  
+  Swal.fire({
+    title: titulo || '¿Estás seguro?',
+    text: texto || "Esta acción no se puede deshacer.",
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonColor: colorBtn || '#dc3545',
+    cancelButtonColor: '#6c757d',
+    confirmButtonText: btnTexto || 'Sí, eliminar',
+    cancelButtonText: 'Cancelar'
+  }).then((result) => {
+    if (result.isConfirmed) {
+      form.submit();
+    }
+  });
 }
 </script>
 

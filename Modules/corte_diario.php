@@ -137,6 +137,12 @@ foreach ($rows as $r) {
     }
 }
 $noEfectivo = $totalCobrado - $efectivo;
+
+
+$qsExport = http_build_query([
+              'fecha' => $fechaSql, // Usamos la variable ya procesada en tu archivo
+              'cliente' => $clienteBusq
+          ]);
 ?>
 
 <style>
@@ -203,14 +209,14 @@ $noEfectivo = $totalCobrado - $efectivo;
         </ul>
       </div>
 
-      <button class="btn btn-outline-secondary btn-sm" type="button"
-              onclick="alert('Exportar a PDF se implementa después 😊');">
-        Exportar PDF
-      </button>
-      <button class="btn btn-outline-secondary btn-sm" type="button"
-              onclick="alert('Exportar a Excel se implementa después 😊');">
-        Exportar Excel
-      </button>
+      <a class="btn btn-outline-danger btn-sm" target="_blank"
+         href="/Sistema-de-Saldos-y-Pagos-/Public/api/corte_diario_export_pdf.php?<?= $qsExport ?>">
+         <i class="bi bi-file-pdf me-1"></i> Exportar PDF
+      </a>
+      <a class="btn btn-outline-success btn-sm" target="_blank"
+         href="/Sistema-de-Saldos-y-Pagos-/Public/api/corte_diario_export_excel.php?<?= $qsExport ?>">
+         <i class="bi bi-file-excel me-1"></i> Exportar Excel
+      </a>
     </div>
   </div>
 

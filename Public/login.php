@@ -548,7 +548,7 @@ body { background:#fffbee; }
             <p class="text-muted text-center mb-4">Ingresa tu correo electrónico registrado. Te enviaremos un código de seguridad.</p>
             <form id="formSendCode">
                 <div class="form-floating mb-3">
-                    <input type="email" class="form-control" id="recupEmail" required placeholder="name@example.com">
+                    <input type="email" class="form-control" id="recupEmail"  required placeholder="name@example.com">
                     <label for="recupEmail">Correo Electrónico</label>
                 </div>
                 <div class="d-grid">
@@ -566,18 +566,18 @@ body { background:#fffbee; }
             </div>
             
             <form id="formResetFinal">
-                <input type="hidden" id="finalEmail">
+                <input type="hidden" id="finalEmail" name="email">
                 
                 <div class="mb-3 text-center">
                     <label class="form-label fw-bold small text-uppercase text-muted">Código de 6 dígitos</label>
-                    <input type="text" class="form-control text-center fw-bold fs-4" id="recupCode" required 
+                    <input type="text" class="form-control text-center fw-bold fs-4" id="recupCode" name="code" required 
                            placeholder="000000" maxlength="6" style="letter-spacing: 8px;">
                 </div>
                 
                 <div class="row g-2 mb-3">
                     <div class="col-6">
                         <label class="form-label small fw-bold">Nueva Contraseña</label>
-                        <input type="password" class="form-control" id="newPass" required minlength="6" placeholder="******">
+                        <input type="password" class="form-control" id="newPass" name="password" required minlength="6" placeholder="******">
                     </div>
                     <div class="col-6">
                         <label class="form-label small fw-bold">Confirmar</label>
@@ -633,49 +633,7 @@ document.getElementById('formSendCode')?.addEventListener('submit', async functi
 
 // 2. Confirmar Cambio
 document.getElementById('formResetFinal')?.addEventListener('submit', async function(e) {
-    e.preventDefault();
-    const email = document.getElementById('finalEmail').value;
-    const code = document.getElementById('recupCode').value;
-    const p1 = document.getElementById('newPass').value;
-    const p2 = document.getElementById('confPass').value;
-
-    if (p1 !== p2) {
-        Swal.fire('Atención', 'Las contraseñas no coinciden', 'warning');
-        return;
-    }
-
-    let fd = new FormData();
-    fd.append('email', email);
-    fd.append('code', code);
-    fd.append('password', p1);
-
-    try {
-        const res = await fetch('api/auth_reset_final.php', { method: 'POST', body: fd });
-        const data = await res.json();
-
-        if (data.ok) {
-            // Cerrar modal y mostrar éxito
-            const modalEl = document.getElementById('modalRecuperar');
-            const modal = bootstrap.Modal.getInstance(modalEl);
-            modal.hide();
-            
-            Swal.fire({
-                icon: 'success',
-                title: '¡Contraseña Actualizada!',
-                text: 'Ya puedes iniciar sesión con tu nueva clave.',
-                confirmButtonColor: '#fdd835',
-                confirmButtonText: 'Entendido'
-            });
-            
-            // Limpiar formulario
-            document.getElementById('formResetFinal').reset();
-            volverPaso1();
-        } else {
-            Swal.fire('Error', data.msg || 'Código inválido', 'error');
-        }
-    } catch (err) {
-        Swal.fire('Error', 'Error de conexión', 'error');
-    }
+    // ... resto del código duplicado
 });
 
 function volverPaso1() {
@@ -683,139 +641,155 @@ function volverPaso1() {
     document.getElementById('step2').classList.add('d-none');
 }
 </script>
+-->
+
+<!-- ========================================== -->
+<!-- ✅ MANTÉN SOLO ESTE BLOQUE (El último) -->
+<!-- ========================================== -->
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
 <script>
+  // Animación burbuja (está bien, no tocar)
   const bubble = document.querySelector(".bubble");
-
-  let x = 100, y = 100;   // posición inicial
-  let dx = 1, dy = 1;     // velocidad (px por frame) -> cambia a 3 o 4 si  quieres que vaya más rápido
-  const speed = 16;       // ~60fps (16ms por frame)
+  let x = 100, y = 100;
+  let dx = 1, dy = 1;
+  const speed = 16;
 
   function move() {
     const w = window.innerWidth - bubble.offsetWidth;
     const h = window.innerHeight - bubble.offsetHeight;
-
     x += dx;
     y += dy;
-
-    // Rebote en los bordes
     if (x <= 0 || x >= w) dx *= -1;
     if (y <= 0 || y >= h) dy *= -1;
-
     bubble.style.left = x + "px";
     bubble.style.top = y + "px";
-
     setTimeout(move, speed);
   }
-
   move();
 </script>
 
 <script>
-// 1. Enviar Código (Con protección anti-doble click)
-document.getElementById('formSendCode')?.addEventListener('submit', async function(e) {
-    e.preventDefault();
-    const btn = document.getElementById('btnSendCode');
-    
-    // Si ya está deshabilitado, no hacemos nada
-    if (btn.disabled) return;
+// 1. ENVIAR CÓDIGO (Paso 1)
+const formSend = document.getElementById('formSendCode');
+if (formSend) {
+    formSend.addEventListener('submit', async function(e) {
+        e.preventDefault();
+        const btn = document.getElementById('btnSendCode');
+        const email = document.getElementById('recupEmail').value;
+        
+        // Bloquear botón para evitar doble envío
+        if (btn.disabled) return; 
+        const txtOriginal = btn.innerHTML;
+        btn.disabled = true; 
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Enviando...';
 
-    const email = document.getElementById('recupEmail').value;
-    const originalText = btn.innerText;
-    
-    // Bloquear botón inmediatamente
-    btn.disabled = true; 
-    btn.innerText = 'Enviando...';
+        let fd = new FormData();
+        fd.append('email', email);
 
-    let fd = new FormData();
-    fd.append('email', email);
+        try {
+            const res = await fetch('api/auth_forgot_code.php', { method: 'POST', body: fd });
+            const data = await res.json();
 
-    try {
-        const res = await fetch('api/auth_forgot_code.php', { method: 'POST', body: fd });
-        const data = await res.json();
-
-        if (data.ok) {
-            document.getElementById('finalEmail').value = email;
-            // Ocultar paso 1 y mostrar paso 2
-            document.getElementById('step1').style.display = 'none'; 
-            document.getElementById('step2').classList.remove('d-none');
-            document.getElementById('step2').style.display = 'block';
-        } else {
-            Swal.fire('Error', data.msg || 'Error desconocido', 'error');
-            // Solo rehabilitar si hubo error
-            btn.disabled = false; 
-            btn.innerText = originalText;
+            if (data.ok) {
+                // ÉXITO: Guardamos el correo en el campo oculto del paso 2
+                document.getElementById('finalEmail').value = email; 
+                
+                // Cambiamos de pantalla
+                document.getElementById('step1').classList.add('d-none');
+                document.getElementById('step2').classList.remove('d-none');
+            } else {
+                Swal.fire('Error', data.msg || 'No se pudo enviar', 'error');
+                btn.disabled = false;
+                btn.innerHTML = txtOriginal;
+            }
+        } catch (err) {
+            console.error(err);
+            Swal.fire('Error', 'Error de conexión', 'error');
+            btn.disabled = false;
+            btn.innerHTML = txtOriginal;
         }
-    } catch (err) {
-        console.error(err);
-        Swal.fire('Error', 'Error de conexión', 'error');
-        btn.disabled = false; 
-        btn.innerText = originalText;
-    }
-});
+    });
+}
 
-// 2. Confirmar Cambio
-document.getElementById('formResetFinal')?.addEventListener('submit', async function(e) {
-    e.preventDefault();
-    const email = document.getElementById('finalEmail').value;
-    const code = document.getElementById('recupCode').value;
-    const p1 = document.getElementById('newPass').value;
-    const p2 = document.getElementById('confPass').value;
+// 2. CONFIRMAR CAMBIO (Paso 2 - Blindado contra doble clic)
+const formReset = document.getElementById('formResetFinal');
+if (formReset) {
+    formReset.addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        // 1. OBTENER BOTÓN Y BLOQUEARLO
+        const btnSubmit = formReset.querySelector('button[type="submit"]');
+        if (btnSubmit.disabled) return; // Si ya está procesando, no hacer nada
+        
+        // Guardar texto original y poner "Cargando..."
+        const txtOriginal = btnSubmit.innerText;
+        btnSubmit.disabled = true;
+        btnSubmit.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Guardando...';
 
-    if (p1 !== p2) {
-        Swal.fire('Atención', 'Las contraseñas no coinciden', 'warning');
-        return;
-    }
+        // 2. VALIDAR
+        const p1 = document.getElementById('newPass').value;
+        const p2 = document.getElementById('confPass').value;
+        
+        // Usamos el campo oculto o el del paso anterior como respaldo
+        const email = document.getElementById('finalEmail').value || document.getElementById('recupEmail').value;
 
-    let fd = new FormData();
-    fd.append('email', email);
-    fd.append('code', code);
-    fd.append('password', p1);
-
-    try {
-        const res = await fetch('api/auth_reset_final.php', { method: 'POST', body: fd });
-        const data = await res.json();
-
-        if (data.ok) {
-            // Cerrar modal
-            const modalEl = document.getElementById('modalRecuperar');
-            const modal = bootstrap.Modal.getInstance(modalEl);
-            if(modal) modal.hide();
-
-            // Mensaje éxito + Recarga
-            Swal.fire({
-                icon: 'success',
-                title: '¡Éxito!',
-                text: 'Contraseña actualizada correctamente.',
-                confirmButtonColor: '#f9af24',
-                confirmButtonText: 'Iniciar Sesión',
-                allowOutsideClick: false
-            }).then((result) => {
-                window.location.href = 'login.php'; 
-            });
-            
-        } else {
-            Swal.fire('Error', data.msg, 'error');
+        if (p1 !== p2) {
+            Swal.fire('Error', 'Las contraseñas no coinciden', 'warning');
+            btnSubmit.disabled = false;
+            btnSubmit.innerText = txtOriginal;
+            return;
         }
-    } catch (err) {
-        Swal.fire('Error', 'Error de conexión', 'error');
-    }
-});
+
+        // 3. PREPARAR DATOS (Forzando el email)
+        let fd = new FormData(formReset);
+        fd.set('email', email); 
+
+        try {
+            const res = await fetch('api/auth_reset_final.php', { method: 'POST', body: fd });
+            const data = await res.json();
+
+            if (data.ok) {
+                // Ocultar modal primero
+                const modalEl = document.getElementById('modalRecuperar');
+                const modal = bootstrap.Modal.getInstance(modalEl);
+                if(modal) modal.hide();
+
+                Swal.fire({
+                    icon: 'success',
+                    title: '¡Contraseña Actualizada!',
+                    text: 'Inicia sesión con tu nueva clave.',
+                    confirmButtonColor: '#fdd835',
+                    allowOutsideClick: false
+                }).then(() => {
+                    window.location.reload(); // Recarga limpia
+                });
+            } else {
+                Swal.fire('Error', data.msg, 'error');
+                // Solo reactivar botón si falló (para que intente de nuevo)
+                btnSubmit.disabled = false;
+                btnSubmit.innerText = txtOriginal;
+            }
+        } catch (err) {
+            Swal.fire('Error', 'Error de red', 'error');
+            btnSubmit.disabled = false;
+            btnSubmit.innerText = txtOriginal;
+        }
+    });
+}
 
 function volverPaso1() {
     document.getElementById('step2').classList.add('d-none');
-    document.getElementById('step2').style.display = 'none';
-    document.getElementById('step1').style.display = 'block';
-    
-    // Rehabilitar botón paso 1
+    document.getElementById('step1').classList.remove('d-none');
+    // Reactivar botón paso 1
     const btn = document.getElementById('btnSendCode');
-    btn.disabled = false;
-    btn.innerText = 'Enviar Código';
+    if(btn) {
+        btn.disabled = false;
+        btn.innerHTML = 'Enviar Código <i class="bi bi-arrow-right ms-2"></i>';
+    }
 }
 </script>
-
 </body>
 </html>

@@ -210,11 +210,23 @@ function fmt_date(?string $d): string {
                 <?php endif; ?>
               </td>
               <td class="text-end">
-                <?php if (!empty($r['orden_id'])): ?>
-                  <a href="/Sistema-de-Saldos-y-Pagos-/Modules/cobro.php?m=cobro&orden_id=<?= (int)$r['orden_id'] ?>" class="btn btn-primary btn-sm">Cobrar</a>
-                <?php else: ?>
-                  <span class="text-muted small">Sin orden</span>
-                <?php endif; ?>
+                <div class="d-flex justify-content-end gap-2">
+                    <?php if (!empty($r['orden_id'])): ?>
+                      <a href="/Sistema-de-Saldos-y-Pagos-/Modules/cobro.php?m=cobro&orden_id=<?= (int)$r['orden_id'] ?>" class="btn btn-primary btn-sm">Cobrar</a>
+                    <?php else: ?>
+                      <span class="text-muted small align-self-center">Sin orden</span>
+                    <?php endif; ?>
+
+                    <?php if (isset($_SESSION['user_rol']) && $_SESSION['user_rol'] === 'admin'): ?>
+                        <form action="/Sistema-de-Saldos-y-Pagos-/Public/api/cliente_eliminar.php" method="POST" class="d-inline"
+                              onsubmit="confirmarAccion(event, '¿Eliminar cliente?', 'Se borrará toda su información, órdenes y cargos asociados.', 'Sí, eliminar', '#dc3545')">
+                            <input type="hidden" name="id" value="<?= $r['id'] ?>">
+                            <button type="submit" class="btn btn-outline-danger btn-sm" title="Eliminar">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </form>
+                    <?php endif; ?>
+                </div>
               </td>
             </tr>
           <?php endforeach; ?>
