@@ -143,7 +143,7 @@ function fmt_date(?string $d): string {
 </style>
 
 <div class="container-fluid clientes-page">
-  <div class="d-flex align-items-center justify-content-between mb-3">
+  <div class="d-flex align-items-center justify-content-between topbar mb-3">
     <h3 class="mb-0">Clientes</h3>
   </div>
 

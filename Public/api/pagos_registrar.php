@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../../App/bd.php';
 require_once __DIR__ . '/../../vendor/autoload.php';
-require_once __DIR__ . '/../../App/notifications.php';
+// require_once __DIR__ . '/../../App/notifications.php'; // Ya no dependemos de esta función genérica aquí
 require_once __DIR__ . '/../../App/pusher_config.php';
 
 if (file_exists(__DIR__ . '/../../App/mailer.php')) {
@@ -72,7 +72,6 @@ try {
     if (!$orden) back('Orden no encontrada', false);
     if ($orden['estado'] !== 'activa') back('La orden no está activa', false, $ordenId);
 
-    // Datos del Emisor (Si no tiene RFC asignado, ponemos datos genéricos)
     $emisorNombre = $orden['emisor_razon'] ?: 'Banana Group Marketing';
     $emisorRFC    = $orden['emisor_rfc'] ? ('RFC: ' . $orden['emisor_rfc']) : 'info@bananagroup.mx';
 
@@ -170,42 +169,50 @@ try {
     $pdo->commit();
 
     // =================================================================================
-    // 9) NOTIFICACIONES Y GENERACIÓN DE PDF
+    // 9) NOTIFICACIONES Y GENERACIÓN DE PDF (CORREGIDO PARA USAR PUSHER DIRECTO)
     // =================================================================================
     
-    if (session_status() === PHP_SESSION_NONE) session_start();
-    $usuarioIdActual = $_SESSION['user_id'] ?? $_SESSION['usuario_id'] ?? null;
+    // Preparar datos
+    $clienteId = (int)$orden['cliente_id'];
+    $titulo    = "Pago Aplicado";
+    $cuerpo    = "Hemos recibido tu pago de $" . number_format($montoPago, 2);
 
-    // A. Notificación Interna
+    // A) Insertar Notificación en BD (Historial)
     try {
-        $notifData = [
-            'tipo'=>'sistema', 'canal'=>'interna', 
-            'titulo'=>'Pago Recibido', 
-            'cuerpo'=>"Pago de {$orden['empresa']} por $".number_format($montoPago,2),
-            'usuario_id'=>$usuarioIdActual, 'cliente_id'=>$orden['cliente_id'],
-            'ref_tipo'=>'pago', 'ref_id'=>$pagoId, 'estado'=>'pendiente'
-        ];
-        enviar_notificacion($pdo, $notifData, true);
+        $sqlNotif = "INSERT INTO notificaciones (cliente_id, tipo, canal, titulo, cuerpo, estado, creado_en, ref_tipo, ref_id) 
+                     VALUES (?, 'externa', 'sistema', ?, ?, 'pendiente', NOW(), 'pago', ?)";
+        $pdo->prepare($sqlNotif)->execute([$clienteId, $titulo, $cuerpo, $pagoId]);
     } catch (Exception $e) {}
 
-    // B. Notificación Cliente
-    try {
-        $stUserCli = $pdo->prepare("SELECT id FROM usuarios WHERE correo = ? AND activo = 1 LIMIT 1");
-        $stUserCli->execute([$orden['correo']]);
-        $idUserCliente = (int)$stUserCli->fetchColumn();
-        if ($idUserCliente > 0) {
-            $notifCliente = [
-                'tipo'=>'sistema', 'canal'=>'interna', 
-                'titulo'=>'Pago Aplicado', 
-                'cuerpo'=>"Recibimos tu pago de $".number_format($montoPago,2),
-                'usuario_id'=>$idUserCliente, 'cliente_id'=>$orden['cliente_id'],
-                'ref_tipo'=>'pago', 'ref_id'=>$pagoId, 'estado'=>'pendiente'
-            ];
-            enviar_notificacion($pdo, $notifCliente, true);
-        }
-    } catch (Exception $e) {}
+    // B) ENVIAR PUSHER MANUAL (Igual que en cargos_emitir.php - ESTA ES LA CLAVE)
+    if (defined('PUSHER_APP_KEY')) {
+        try {
+            $pusher = new Pusher\Pusher(
+                PUSHER_APP_KEY, PUSHER_APP_SECRET, PUSHER_APP_ID, 
+                ['cluster' => PUSHER_APP_CLUSTER, 'useTLS' => true]
+            );
 
-    // C. GENERAR PDF Y ENVIAR CORREO
+            // 1. Canal Notificaciones (Suena la campana)
+            $pusher->trigger('notificaciones_cliente_' . $clienteId, 'nueva-notificacion', [
+                'titulo' => $titulo,
+                'cuerpo' => $cuerpo,
+                'ref_tipo' => 'pago',
+                'ref_id' => $pagoId
+            ]);
+
+            // 2. Canal Saldo (Actualizar dashboard)
+            $stS = $pdo->prepare("SELECT COALESCE(SUM(total),0) FROM cargos JOIN ordenes o ON o.id=cargos.orden_id WHERE o.cliente_id=? AND estatus IN ('emitido','vencido','pendiente')");
+            $stS->execute([$clienteId]);
+            $nuevoSaldo = (float)$stS->fetchColumn();
+
+            $pusher->trigger('cliente_' . $clienteId, 'actualizar-saldo', [
+                'nuevo_saldo' => $nuevoSaldo
+            ]);
+
+        } catch (Exception $e) {}
+    }
+
+    // C) GENERAR PDF Y ENVIAR CORREO (Diseño Banana Group)
     if (function_exists('enviar_correo_sistema') && !empty($orden['correo'])) {
         try {
             // Datos PDF
@@ -221,7 +228,7 @@ try {
                 $logoBase64 = 'data:image/' . $type . ';base64,' . base64_encode($data);
             }
 
-            // --- HTML DEL RECIBO (DISEÑO SOLICITADO) ---
+            // HTML PDF
             $html = '
             <!DOCTYPE html>
             <html lang="es">
@@ -287,9 +294,6 @@ try {
             
             foreach ($items as $it) {
                 $mItem = (float)$it['monto'];
-                // OJO: En tu lógica original el precio items ya podría tener IVA o no. 
-                // Aquí asumimos que $it['monto'] es base y le sumamos IVA para mostrar total.
-                // Si $it['monto'] YA tiene IVA, quita el "* (1 + IVA_TASA)".
                 $mItemTotal = $mItem * (1 + IVA_TASA); 
                 $html .= '<tr><td>' . htmlspecialchars($it['concepto']) . '</td><td class="amount">$' . number_format($mItemTotal, 2) . '</td></tr>';
             }
@@ -322,9 +326,7 @@ try {
 
             if (file_exists($tempFile)) unlink($tempFile);
 
-        } catch (Exception $e) {
-            // Si falla el correo, no detenemos el flujo, solo avisamos (o logueamos)
-        }
+        } catch (Exception $e) { }
     }
 
     back('Pago registrado correctamente.', true, $ordenId);

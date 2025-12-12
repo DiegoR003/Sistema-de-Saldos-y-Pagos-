@@ -1,4 +1,5 @@
 <?php
+// 1. INICIAR LÓGICA PHP
 if (!defined('BASE_URL')) {
   $cfg = __DIR__ . '/../app/config.php';
   if (file_exists($cfg)) require_once $cfg;
@@ -13,57 +14,59 @@ require_once __DIR__ . '/../App/auth.php';
 require_once __DIR__ . '/../App/notifications.php';
 require_once __DIR__ . '/../App/pusher_config.php';
 
+if (session_status() === PHP_SESSION_NONE) session_start();
+
 $pdo = db();
 $currentUser = current_user();
 
 // ==============================================================================
 // 🔒 SEGURIDAD CRÍTICA: DETECTAR USUARIO ELIMINADO (KILL SWITCH)
 // ==============================================================================
-// Lógica: Si hay un ID de usuario en sesión (es staff), pero current_user() devolvió 
-// false/null (no está en BD), significa que fue eliminado. ¡Hay que sacarlo!
 if (isset($_SESSION['user_id']) && !$currentUser && !isset($_SESSION['cliente_id'])) {
-    // 1. Borrar sesión
     session_unset();
     session_destroy();
-    
-    // 2. Expulsar al login
     header('Location: /Sistema-de-Saldos-y-Pagos-/Public/login.php?err=Acceso_revocado');
-    exit; // Detener ejecución del script aquí mismo
+    exit; 
 }
 // ==============================================================================
 
 // --- DEFINIR VARIABLES POR DEFECTO ---
-// Ahora sí, si llegamos aquí es porque el usuario existe o es un cliente válido.
-
-// Si current_user() falló (y no somos cliente), forzamos guest pero ya validamos arriba
-$usuarioId = (int)($currentUser['id'] ?? 0);
+$usuarioId    = (int)($currentUser['id'] ?? 0);
 $usuarioEmail = $currentUser['correo'] ?? '';
-$userName = $currentUser['nombre'] ?? 'Invitado';
-
-// AQUÍ PUEDES QUITAR EL FALLBACK PELIGROSO
-// Como ya validamos arriba que el usuario existe, esto es seguro:
-$usuarioRol = $currentUser['rol'] ?? ''; 
-
-$userInitial = 'U';
-$fotoUsuario = '';
+$userName     = $currentUser['nombre'] ?? 'Invitado';
+$usuarioRol   = $currentUser['rol'] ?? ''; 
+$userInitial  = 'U';
+$fotoUsuario  = '';
 
 $clienteId = 0;
 $esCliente = false;
 
 // 2. DETECTAR SI ES CLIENTE O ADMIN
 if (isset($_SESSION['cliente_id'])) {
+    // Caso A: Ya está logueado explícitamente como cliente
     $esCliente = true;
     $clienteId = (int)$_SESSION['cliente_id'];
     $usuarioRol = 'cliente';
     $userName = $_SESSION['nombre_cliente'] ?? 'Cliente'; 
+} elseif ($usuarioId > 0 && !empty($usuarioEmail)) {
+    // Caso B: Logueado como Usuario, verificar si es Cliente por su correo
+    $stCli = $pdo->prepare("SELECT id, empresa FROM clientes WHERE correo = ? LIMIT 1");
+    $stCli->execute([$usuarioEmail]);
+    $cliData = $stCli->fetch(PDO::FETCH_ASSOC);
+    
+    if ($cliData) {
+        $esCliente = true;
+        $clienteId = (int)$cliData['id'];
+        
+        // ✅ AGREGA ESTA LÍNEA AQUÍ:
+        // Guardamos en sesión para que 'notificaciones_leer.php' sepa quién es el cliente
+        $_SESSION['cliente_id'] = $clienteId; 
+    }
 }
-
 $userInitial = mb_substr($userName, 0, 1, 'UTF-8');
 
-
-
-// Foto solo para Staff
-if (!$esCliente && $usuarioId > 0) {
+// Foto solo para Staff (si no es cliente puro)
+if ($usuarioId > 0) {
     $stUser = $pdo->prepare("SELECT nombre, foto_url FROM usuarios WHERE id = ? LIMIT 1");
     $stUser->execute([$usuarioId]);
     $datosFrescos = $stUser->fetch(PDO::FETCH_ASSOC);
@@ -74,7 +77,7 @@ if (!$esCliente && $usuarioId > 0) {
 }
 
 // -------------------------------------------------------------------
-//  CARGAR NOTIFICACIONES
+//  CARGAR NOTIFICACIONES (Ahora sí usará el $clienteId correcto)
 // -------------------------------------------------------------------
 $notificaciones = [];
 

@@ -143,15 +143,15 @@ try {
             .svc-row:nth-child(odd) td { background-color: #fff8e1; }
             .svc-row:nth-child(even) td { background-color: #fdfdfd; }
             .svc-name { font-size: 11px; font-weight: bold; color: #000; margin-bottom: 2px; }
-            .svc-detail { font-size: 10px; color: #555; font-style: italic; }
+            .svc-detail { font-size: 8px; color: #555; font-style: italic; }
 
             /* TÉRMINOS */
             .terms-box {
-                margin-top: 15px; background-color: #f4f4f4; padding: 10px 15px;
+                margin-top: 10px; background-color: #f4f4f4; padding: 10px 15px;
                 border-radius: 5px; border-left: 3px solid #1a1a1a;
             }
-            .terms-head { font-size: 9px; font-weight: bold; margin-bottom: 5px; color: #000; }
-            .terms-text { font-size: 9px; color: #444; text-align: justify; line-height: 1.3; }
+            .terms-head { font-size: 7px; font-weight: bold; margin-bottom: 5px; color: #000; }
+            .terms-text { font-size: 7px; color: #444; text-align: justify; line-height: 1.3; }
             .terms-text p { margin: 0 0 2px 0; }
 
             /* FOOTER */
@@ -212,22 +212,25 @@ try {
                 <?php endforeach; ?>
             </table>
 
-            <div class="terms-box">
-                <div class="terms-head">* Contrato a 4 meses. Renovable mensualmente.</div>
-                <div class="terms-text">
-                    <p>• Pago en mes de emisión. Tardío genera $1,000 extra.</p>
-                    <p>• Sin descuentos por suspensión. No se prorratean paquetes.</p>
-                    <p>• Cancelaciones aviso previo día 5.</p>
-                    <p>• Hosting incluido en contrato. Al cancelar $3,500 anual.</p>
-                    <p>• No responsables por intervención del cliente.</p>
-                    <p>• Emergencias entrega 60min (solo desastres/vacantes).</p>
-                    <p>• Planeación entrega día 20 mes anterior.</p>
-                    <p>• Horario: 8am-5pm (Cabo), Lun-Vie.</p>
-                    <p>• Precios +IVA. Sesiones reprogramables 24h antes.</p>
-                    <p>• Servicios no acumulables.</p>
-                </div>
+           <div class="terms-box">
+            <div class="terms-head">* Contrato a 4 meses. Renovable mensualmente.</div>
+            <div class="terms-text">
+                <p>• Se paga durante el mes de la emisión de la factura. En caso contrario se cobran $1,000 adicionales por concepto de pago tardío y se suspende el servicio totalmente. No se da descuento por el tiempo suspendido. </p>
+                <p>• No se prorratean paquetes. (Por ejemplo, si el día 5 de Septiembre se desea cancelar el servicio y pagar el mes en curso, debe pagarse todo el mes de Septiembre, no solamente 5 días.)</p>
+                <p>• Se tiene hasta el día 5 de cada mes para cancelar el servicio del siguiente mes. (Por ejemplo, a más tardar el 5 de Septiembre se debe avisar que no se requerirá el servicio en el mes de Octubre.)</p>
+                <p>• El hospedaje y dominio están incluidos en su paquete durante la contratación del servicio mensual, a partir de la cancelación aplica anualidad de $3,500 + IVA en caso de querer mantener el sitio en línea.</p>
+                <p>• No nos hacemos responsables de estadísticas de ventas si el cliente interviene en el proceso en contra de nuestras recomendaciones.</p>
+                <p>• Diseños de emergencia se entregan en 60 minutos. Solo se consideran emergencias las situaciones que alteren la operación de su negocio. (Desastres naturales, cierres sin previo aviso y vacantes.)</p>
+                <p>• Planeación del mes siguiente se entrega el día 20 del mes anterior como máximo, dejando 10 días naturales para correcciones y/o ajustes.</p>
+                <p>• Website informativo se entrega 15 días naturales después de tener toda la información que incluirá el mismo.</p>
+                <p>• Website con sistema web se entrega en 20 días hábiles una vez entregada toda la información que incluirá el mismo</p>
+                <p>• Horario de atención 8:00 am a 5:00 pm hora Los Cabos. 9:00 am a 6:00 pm hora Guadalajara lunes a viernes. No atendemos sábados, domingos ni días festivos.</p>
+                <p>• Precios más IVA en caso de factura, depósito o transferencia.</p>
+                <p>• Las sesiones se pueden reprogramar 24 hrs. antes. Si se cancelan entre 23 y 30 minutos antes, hay una cuota de $500 por foto y $500 por video. Si se cancela en menos de 30 minutos antes, se considera como sesión cumplida. </p>
+                <p>• Todos los servicios, se usen o no total o parcialmente, vencen el último día hábil de cada mes. No son acumulables.</p>
             </div>
         </div>
+    </div>
 
         <div class="footer">
             <table class="ft-tbl">
@@ -256,15 +259,15 @@ try {
                         </div>
                         
                         <div style="font-size:9px; color:#ccc;">
-                            <a href="https://facebook.com" target="_blank" class="link-clean" style="margin-right:10px;">
+                            <a href="https://www.facebook.com/BananaGroupMx" target="_blank" class="link-clean" style="margin-right:10px;">
                                 <img src="<?= $ic_fb ?>" class="icon-img" style="width:12px;height:12px;"> Facebook
                             </a>
-                            <a href="https://instagram.com" target="_blank" class="link-clean" style="margin-right:10px;">
+                           <!-- <a href="https://instagram.com" target="_blank" class="link-clean" style="margin-right:10px;">
                                 <img src="<?= $ic_ig ?>" class="icon-img" style="width:12px;height:12px;"> Instagram
                             </a>
                             <a href="https://linkedin.com" target="_blank" class="link-clean">
                                 <img src="<?= $ic_in ?>" class="icon-img" style="width:12px;height:12px;"> LinkedIn
-                            </a>
+                            </a>-->
                         </div>
                     </td>
                 </tr>

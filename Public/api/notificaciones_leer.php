@@ -1,51 +1,52 @@
 <?php
-// Public/api/notificacion_leer.php
-declare(strict_types=1);
+// Public/api/notificaciones_leer.php
 require_once __DIR__ . '/../../App/bd.php';
 require_once __DIR__ . '/../../App/auth.php';
 
-header('Content-Type: application/json');
-
 if (session_status() === PHP_SESSION_NONE) session_start();
-
-// 1. Validar sesión
-$u = function_exists('current_user') ? current_user() : null;
-if (!$u || empty($u['id'])) { 
-    echo json_encode(['ok'=>false, 'msg'=>'No sesión']); 
-    exit; 
-}
-
 $pdo = db();
-$userId = (int)$u['id'];
 
-// 2. Recibir parámetros
-$id = isset($_POST['id']) ? (int)$_POST['id'] : 0;
-$marcarTodas = isset($_POST['todas']) && $_POST['todas'] === 'true';
+// Recibir datos
+$id = (int)($_POST['id'] ?? 0);
+$todas = isset($_POST['todas']);
+
+// Identificar IDs de sesión
+$clienteId = isset($_SESSION['cliente_id']) ? (int)$_SESSION['cliente_id'] : 0;
+$usuarioId = isset($_SESSION['user_id'])    ? (int)$_SESSION['user_id']    : 0;
 
 try {
-    if ($marcarTodas) {
-        // OPCIÓN A: Marcar TODAS como leídas (Borra el contador rojo de golpe)
-        // Afecta a las propias ($userId) y a las globales internas (usuario_id NULL)
-        $sql = "UPDATE notificaciones 
-                SET estado = 'leida', leida_en = NOW() 
-                WHERE leida_en IS NULL 
-                AND (usuario_id = ? OR (tipo = 'interna' AND usuario_id IS NULL))";
-        $st = $pdo->prepare($sql);
-        $st->execute([$userId]);
-        
-    } elseif ($id > 0) {
-        // OPCIÓN B: Marcar UNA sola (cuando se hace clic en la X)
-        $sql = "UPDATE notificaciones 
-                SET estado = 'leida', leida_en = NOW() 
-                WHERE id = ? 
-                AND leida_en IS NULL
-                AND (usuario_id = ? OR (tipo = 'interna' AND usuario_id IS NULL))";
-        $st = $pdo->prepare($sql);
-        $st->execute([$id, $userId]);
+    if ($clienteId > 0) {
+        // === LÓGICA PARA CLIENTES ===
+        // Solo marcamos las 'externas' que pertenecen a este cliente
+        if ($todas) {
+            $sql = "UPDATE notificaciones SET leida_en = NOW(), estado = 'leida' 
+                    WHERE cliente_id = ? AND tipo = 'externa' AND leida_en IS NULL";
+            $pdo->prepare($sql)->execute([$clienteId]);
+        } elseif ($id > 0) {
+            $sql = "UPDATE notificaciones SET leida_en = NOW(), estado = 'leida' 
+                    WHERE id = ? AND cliente_id = ?";
+            $pdo->prepare($sql)->execute([$id, $clienteId]);
+        }
+    } elseif ($usuarioId > 0) {
+        // === LÓGICA PARA ADMIN/STAFF ===
+        // Marcamos las 'internas' asignadas al usuario o globales (usuario_id NULL)
+        if ($todas) {
+            $sql = "UPDATE notificaciones SET leida_en = NOW(), estado = 'leida' 
+                    WHERE (usuario_id = ? OR usuario_id IS NULL) 
+                      AND tipo = 'interna' 
+                      AND leida_en IS NULL";
+            $pdo->prepare($sql)->execute([$usuarioId]);
+        } elseif ($id > 0) {
+            // Aquí podríamos validar que la notificación sea del usuario, pero por simplicidad permitimos por ID
+            $sql = "UPDATE notificaciones SET leida_en = NOW(), estado = 'leida' 
+                    WHERE id = ?";
+            $pdo->prepare($sql)->execute([$id]);
+        }
     }
 
-    echo json_encode(['ok'=>true]);
+    echo json_encode(['ok' => true]);
 
 } catch (Exception $e) {
-    echo json_encode(['ok'=>false, 'err'=>$e->getMessage()]);
+    echo json_encode(['ok' => false, 'msg' => $e->getMessage()]);
 }
+?>

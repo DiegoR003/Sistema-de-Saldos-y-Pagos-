@@ -192,6 +192,7 @@ function fmt_fecha(?string $d): string {
               <div class="col-md-4">
                 <label class="form-label fw-semibold small">Contraseña actual</label>
                 <input type="password" class="form-control" name="password_actual" required>
+                
               </div>
               <div class="col-md-4">
                 <label class="form-label fw-semibold small">Nueva contraseña</label>

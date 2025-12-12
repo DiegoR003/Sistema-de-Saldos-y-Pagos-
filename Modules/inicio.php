@@ -169,7 +169,7 @@ $jsonChartData = json_encode($dataMeses);
             $<?= number_format($totalIngresos, 2) ?>
           </div>
           <div class="stat-label">Ingresos Totales (Histórico)</div>
-          <a href="?m=cobros" class="stat-link">Ver reporte <i class="bi bi-arrow-right"></i></a>
+          <a href="?m=corte_diario" class="stat-link">Ver reporte <i class="bi bi-arrow-right"></i></a>
         </div>
       </div>
     </div>
