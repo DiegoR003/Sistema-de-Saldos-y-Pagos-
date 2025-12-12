@@ -78,11 +78,11 @@ $notifPendientes = (int)$stNotif->fetchColumn();
                         </div>
                     </div>
 
-                    <div class="mt-5 text-muted small">
+                    <!--<div class="mt-5 text-muted small">
                         <i class="bi bi-arrow-clockwise"></i> Actualización en tiempo real
                     </div>
                     
-                    <!-- Debug Info -->
+                     Debug Info 
                     <div class="mt-3 text-start small text-muted" id="debugInfo" style="background:#f8f9fa; padding:10px; border-radius:5px; display:none;">
                         <strong>🔧 Debug Info:</strong>
                         <div>Cliente ID: <code><?= $cliente['id'] ?></code></div>
@@ -99,7 +99,7 @@ $notifPendientes = (int)$stNotif->fetchColumn();
                     <button class="btn btn-sm btn-outline-secondary mt-2" onclick="toggleDebug()">
                         🔍 Toggle Debug
                     </button>
-                </div>
+                </div>-->
             </div>
         </div>
     </div>

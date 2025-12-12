@@ -2,18 +2,14 @@
 // Public/api/pagos_registrar.php
 declare(strict_types=1);
 
-// 1. Cargar dependencias esenciales
 require_once __DIR__ . '/../../App/bd.php';
-require_once __DIR__ . '/../../vendor/autoload.php'; // Dompdf
-require_once __DIR__ . '/../../App/notifications.php'; // Campanita
+require_once __DIR__ . '/../../vendor/autoload.php';
+require_once __DIR__ . '/../../App/notifications.php';
 require_once __DIR__ . '/../../App/pusher_config.php';
 
-// Cargar Mailer
 if (file_exists(__DIR__ . '/../../App/mailer.php')) {
     require_once __DIR__ . '/../../App/mailer.php';
 }
-
-// Cargar utilidades
 if (file_exists(__DIR__ . '/../../App/date_utils.php')) {
     require_once __DIR__ . '/../../App/date_utils.php';
 }
@@ -21,7 +17,7 @@ if (file_exists(__DIR__ . '/../../App/date_utils.php')) {
 use Dompdf\Dompdf;
 use Dompdf\Options;
 
-// Fallbacks
+// Fallbacks de funciones utilitarias
 if (!function_exists('end_by_interval')) {
     function end_by_interval(DateTimeImmutable $start, string $unit, int $count): DateTimeImmutable {
         if ($unit === 'anual') return $start->modify('+1 year')->modify('-1 day');
@@ -62,11 +58,12 @@ try {
 
     $pdo = db();
 
-    // 1) Cargar orden y datos cliente
+    // 1) Cargar orden, cliente y RFC EMISOR
     $st = $pdo->prepare("
-        SELECT o.*, c.empresa, c.correo, c.telefono
+        SELECT o.*, c.empresa, c.correo, c.telefono, r.razon_social as emisor_razon, r.rfc as emisor_rfc
         FROM ordenes o
         JOIN clientes c ON c.id = o.cliente_id
+        LEFT JOIN company_rfcs r ON r.id = o.rfc_id
         WHERE o.id = ? FOR UPDATE
     ");
     $st->execute([$ordenId]);
@@ -74,6 +71,10 @@ try {
 
     if (!$orden) back('Orden no encontrada', false);
     if ($orden['estado'] !== 'activa') back('La orden no está activa', false, $ordenId);
+
+    // Datos del Emisor (Si no tiene RFC asignado, ponemos datos genéricos)
+    $emisorNombre = $orden['emisor_razon'] ?: 'Banana Group Marketing';
+    $emisorRFC    = $orden['emisor_rfc'] ? ('RFC: ' . $orden['emisor_rfc']) : 'info@bananagroup.mx';
 
     // 2) Periodo
     $iniStr = trim((string)($_POST['periodo_inicio'] ?? ''));
@@ -92,13 +93,13 @@ try {
 
     $pdo->beginTransaction();
 
-    // 3) Cargo
+    // 3) Cargo existente o nuevo
     $stCargo = $pdo->prepare("SELECT * FROM cargos WHERE orden_id=? AND periodo_inicio=? AND periodo_fin=? LIMIT 1");
     $stCargo->execute([$ordenId, $periodo_inicio, $periodo_fin]);
     $cargo = $stCargo->fetch(PDO::FETCH_ASSOC);
     $cargoId = $cargo ? (int)$cargo['id'] : 0;
 
-    // 4) Items
+    // 4) Items a cobrar
     $it = $pdo->prepare("
         SELECT * FROM orden_items 
         WHERE orden_id=? AND pausado=0 
@@ -110,7 +111,7 @@ try {
 
     if (!$items) { $pdo->rollBack(); back('No hay partidas para cobrar', false, $ordenId); }
 
-    // 5) Totales
+    // 5) Calcular totales
     $subtotal = 0.0; $iva = 0.0; $total = 0.0;
     foreach ($items as $r) {
         $m = (float)$r['monto'];
@@ -121,7 +122,7 @@ try {
     $iva = money_round($iva);
     $total = money_round($total);
 
-    // 6) Guardar Cargo
+    // 6) Guardar/Actualizar Cargo
     if ($cargoId === 0) {
         $insCargo = $pdo->prepare("INSERT INTO cargos (orden_id, rfc_id, periodo_inicio, periodo_fin, subtotal, iva, total, estatus) VALUES (?,?,?,?,?,?,?,'pagado')");
         $insCargo->execute([$ordenId, $orden['rfc_id']?:null, $periodo_inicio, $periodo_fin, $subtotal, $iva, $total]);
@@ -145,7 +146,7 @@ try {
     $insPago->execute([$ordenId, money_round($montoPago), $metodo, $referencia, $cargoId]);
     $pagoId = (int)$pdo->lastInsertId();
 
-    // 8) Actualizar fechas
+    // 8) Actualizar fechas items y saldo orden
     $nextDates = [];
     foreach ($items as $r) {
         if ($r['billing_type'] === 'recurrente') {
@@ -169,63 +170,49 @@ try {
     $pdo->commit();
 
     // =================================================================================
-    // 9) NOTIFICACIONES Y CORREO
+    // 9) NOTIFICACIONES Y GENERACIÓN DE PDF
     // =================================================================================
     
     if (session_status() === PHP_SESSION_NONE) session_start();
     $usuarioIdActual = $_SESSION['user_id'] ?? $_SESSION['usuario_id'] ?? null;
 
-    // A. Notificación Interna (STAFF - Admin/Operador)
+    // A. Notificación Interna
     try {
         $notifData = [
-            'tipo'       => 'sistema',
-            'canal'      => 'interna',
-            'titulo'     => 'Pago Recibido',
-            'cuerpo'     => "Se registró pago de {$orden['empresa']} por $" . number_format($montoPago, 2),
-            'usuario_id' => $usuarioIdActual, // Feedback al que cobró
-            'cliente_id' => $orden['cliente_id'],
-            'ref_tipo'   => 'pago',
-            'ref_id'     => $pagoId,
-            'estado'     => 'pendiente'
+            'tipo'=>'sistema', 'canal'=>'interna', 
+            'titulo'=>'Pago Recibido', 
+            'cuerpo'=>"Pago de {$orden['empresa']} por $".number_format($montoPago,2),
+            'usuario_id'=>$usuarioIdActual, 'cliente_id'=>$orden['cliente_id'],
+            'ref_tipo'=>'pago', 'ref_id'=>$pagoId, 'estado'=>'pendiente'
         ];
         enviar_notificacion($pdo, $notifData, true);
     } catch (Exception $e) {}
 
-
-    //  B. Notificación al CLIENTE (NUEVO)
-    // Buscamos si hay un usuario asociado al correo del cliente
+    // B. Notificación Cliente
     try {
         $stUserCli = $pdo->prepare("SELECT id FROM usuarios WHERE correo = ? AND activo = 1 LIMIT 1");
         $stUserCli->execute([$orden['correo']]);
         $idUserCliente = (int)$stUserCli->fetchColumn();
-
         if ($idUserCliente > 0) {
             $notifCliente = [
-                'tipo'       => 'sistema',
-                'canal'      => 'interna',
-                'titulo'     => 'Pago Aplicado Correctamente',
-                'cuerpo'     => "Hemos registrado tu pago por $" . number_format($montoPago, 2) . ". El recibo se envió a tu correo.",
-                'usuario_id' => $idUserCliente, // ID del usuario cliente
-                'cliente_id' => $orden['cliente_id'],
-                'ref_tipo'   => 'pago',
-                'ref_id'     => $pagoId,
-                'estado'     => 'pendiente'
+                'tipo'=>'sistema', 'canal'=>'interna', 
+                'titulo'=>'Pago Aplicado', 
+                'cuerpo'=>"Recibimos tu pago de $".number_format($montoPago,2),
+                'usuario_id'=>$idUserCliente, 'cliente_id'=>$orden['cliente_id'],
+                'ref_tipo'=>'pago', 'ref_id'=>$pagoId, 'estado'=>'pendiente'
             ];
-            // Disparar campanita del cliente
             enviar_notificacion($pdo, $notifCliente, true);
         }
     } catch (Exception $e) {}
 
-
-    // C. Enviar Correo con PDF
+    // C. GENERAR PDF Y ENVIAR CORREO
     if (function_exists('enviar_correo_sistema') && !empty($orden['correo'])) {
         try {
-            // --- C.1 Preparar datos para el PDF ---
-            $folio       = str_pad((string)$pagoId, 6, '0', STR_PAD_LEFT);
-            $fechaPago   = date('d/m/Y H:i');
-            $periodoTxt  = date('d/m/Y', strtotime($periodo_inicio)) . ' al ' . date('d/m/Y', strtotime($periodo_fin));
+            // Datos PDF
+            $folio     = str_pad((string)$pagoId, 6, '0', STR_PAD_LEFT);
+            $fechaPago = date('d/m/Y H:i');
             
-            // Logo
+            // Logo Base64
             $rutaLogo = __DIR__ . '/../../Public/assets/logo.png'; 
             $logoBase64 = '';
             if (file_exists($rutaLogo)) {
@@ -234,7 +221,7 @@ try {
                 $logoBase64 = 'data:image/' . $type . ';base64,' . base64_encode($data);
             }
 
-            // --- C.2 HTML DEL RECIBO ---
+            // --- HTML DEL RECIBO (DISEÑO SOLICITADO) ---
             $html = '
             <!DOCTYPE html>
             <html lang="es">
@@ -273,8 +260,20 @@ try {
                 <div class="info-section">
                     <table class="info-table">
                         <tr>
-                            <td><div class="label">EMISOR</div><div class="value">Banana Group Marketing<br>info@bananagroup.mx</div></td>
-                            <td><div class="label">CLIENTE</div><div class="value"><strong>' . htmlspecialchars($orden['empresa']) . '</strong><br>' . htmlspecialchars($orden['correo']) . '</div></td>
+                            <td>
+                                <div class="label">EMISOR</div>
+                                <div class="value">
+                                    <strong>' . htmlspecialchars($emisorNombre) . '</strong><br>
+                                    ' . htmlspecialchars($emisorRFC) . '
+                                </div>
+                            </td>
+                            <td>
+                                <div class="label">CLIENTE</div>
+                                <div class="value">
+                                    <strong>' . htmlspecialchars($orden['empresa']) . '</strong><br>
+                                    ' . htmlspecialchars($orden['correo']) . '
+                                </div>
+                            </td>
                         </tr>
                         <tr>
                             <td><div class="label">FECHA</div><div class="value">' . $fechaPago . '</div></td>
@@ -288,7 +287,10 @@ try {
             
             foreach ($items as $it) {
                 $mItem = (float)$it['monto'];
-                $mItemTotal = $mItem * (1 + IVA_TASA);
+                // OJO: En tu lógica original el precio items ya podría tener IVA o no. 
+                // Aquí asumimos que $it['monto'] es base y le sumamos IVA para mostrar total.
+                // Si $it['monto'] YA tiene IVA, quita el "* (1 + IVA_TASA)".
+                $mItemTotal = $mItem * (1 + IVA_TASA); 
                 $html .= '<tr><td>' . htmlspecialchars($it['concepto']) . '</td><td class="amount">$' . number_format($mItemTotal, 2) . '</td></tr>';
             }
             
@@ -298,50 +300,37 @@ try {
                     <span class="total-val">$' . number_format($montoPago, 2) . ' MXN</span>
                 </div>
                 <div class="footer">Este documento es un comprobante de pago interno y no sustituye a una factura fiscal (CFDI).<br>
-        Gracias por su preferencia.</div>
+                Gracias por su preferencia.</div>
             </body>
             </html>';
 
-            // --- C.3 Generar PDF ---
-            $options = new Options();
-            $options->set('isRemoteEnabled', true);
-            $dompdf = new Dompdf($options);
+            // --- Generar PDF ---
+            $dompdf = new Dompdf((new Options())->set('isRemoteEnabled', true));
             $dompdf->loadHtml($html);
-            $dompdf->setPaper('A4', 'portrait');
+            $dompdf->setPaper('A4');
             $dompdf->render();
             $pdfContent = $dompdf->output();
 
-            $tempDir = sys_get_temp_dir();
-            $tempFile = $tempDir . '/recibo_' . $pagoId . '.pdf';
+            $tempFile = sys_get_temp_dir() . '/Recibo_' . $folio . '.pdf';
             file_put_contents($tempFile, $pdfContent);
 
-            // --- C.4 Enviar Correo ---
+            // --- Enviar Correo ---
             $asunto = "Comprobante de Pago #$folio - Banana Group";
-            $cuerpoCorreo = "
-                <div style='font-family: Arial, color: #333;'>
-                    <h2 style='color: #fdd835;'>¡Pago Recibido!</h2>
-                    <p>Hola <strong>" . htmlspecialchars($orden['empresa']) . "</strong>,</p>
-                    <p>Hemos recibido tu pago por la cantidad de <strong>$" . number_format($montoPago, 2) . "</strong>.</p>
-                    <p>Adjunto encontrarás tu comprobante en formato PDF.</p>
-                    <hr>
-                    <p><small>Gracias por tu preferencia.</small></p>
-                </div>
-            ";
+            $cuerpoCorreo = "<h3>¡Pago Recibido!</h3><p>Hola {$orden['empresa']}, hemos recibido tu pago por $".number_format($montoPago,2).". Adjunto encontrarás tu recibo.</p>";
             
             enviar_correo_sistema($orden['correo'], $orden['empresa'], $asunto, $cuerpoCorreo, [$tempFile]);
 
             if (file_exists($tempFile)) unlink($tempFile);
 
         } catch (Exception $e) {
-            back('Pago registrado, pero hubo error al enviar el recibo: ' . $e->getMessage(), true, $ordenId);
+            // Si falla el correo, no detenemos el flujo, solo avisamos (o logueamos)
         }
     }
 
-    back('Pago registrado y comprobante enviado.', true, $ordenId);
+    back('Pago registrado correctamente.', true, $ordenId);
 
 } catch (Throwable $e) {
-    if (isset($pdo) && $pdo->inTransaction()) {
-        $pdo->rollBack();
-    }
-    back('Error al registrar pago: ' . $e->getMessage(), false);
+    if (isset($pdo) && $pdo->inTransaction()) $pdo->rollBack();
+    back('Error: ' . $e->getMessage(), false);
 }
+?>

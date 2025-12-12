@@ -16,28 +16,51 @@ require_once __DIR__ . '/../App/pusher_config.php';
 $pdo = db();
 $currentUser = current_user();
 
-// 1. DETECTAR IDENTIDAD (Cliente o Admin)
-$esCliente = false;
-$usuarioId = 0;
-$clienteId = 0;
-$userName = 'Usuario';
-$usuarioRol = 'guest';
+// ==============================================================================
+// 🔒 SEGURIDAD CRÍTICA: DETECTAR USUARIO ELIMINADO (KILL SWITCH)
+// ==============================================================================
+// Lógica: Si hay un ID de usuario en sesión (es staff), pero current_user() devolvió 
+// false/null (no está en BD), significa que fue eliminado. ¡Hay que sacarlo!
+if (isset($_SESSION['user_id']) && !$currentUser && !isset($_SESSION['cliente_id'])) {
+    // 1. Borrar sesión
+    session_unset();
+    session_destroy();
+    
+    // 2. Expulsar al login
+    header('Location: /Sistema-de-Saldos-y-Pagos-/Public/login.php?err=Acceso_revocado');
+    exit; // Detener ejecución del script aquí mismo
+}
+// ==============================================================================
+
+// --- DEFINIR VARIABLES POR DEFECTO ---
+// Ahora sí, si llegamos aquí es porque el usuario existe o es un cliente válido.
+
+// Si current_user() falló (y no somos cliente), forzamos guest pero ya validamos arriba
+$usuarioId = (int)($currentUser['id'] ?? 0);
+$usuarioEmail = $currentUser['correo'] ?? '';
+$userName = $currentUser['nombre'] ?? 'Invitado';
+
+// AQUÍ PUEDES QUITAR EL FALLBACK PELIGROSO
+// Como ya validamos arriba que el usuario existe, esto es seguro:
+$usuarioRol = $currentUser['rol'] ?? ''; 
+
 $userInitial = 'U';
 $fotoUsuario = '';
 
+$clienteId = 0;
+$esCliente = false;
+
+// 2. DETECTAR SI ES CLIENTE O ADMIN
 if (isset($_SESSION['cliente_id'])) {
     $esCliente = true;
     $clienteId = (int)$_SESSION['cliente_id'];
     $usuarioRol = 'cliente';
-    // Si tienes el nombre del cliente en sesión, úsalo, si no, busca en BD
     $userName = $_SESSION['nombre_cliente'] ?? 'Cliente'; 
-} else {
-    $usuarioId = (int)($currentUser['id'] ?? $_SESSION['usuario_id'] ?? 0);
-    $usuarioRol = $currentUser['rol'] ?? $_SESSION['usuario_rol'] ?? 'guest';
-    $userName = $currentUser['nombre'] ?? 'Usuario';
 }
 
 $userInitial = mb_substr($userName, 0, 1, 'UTF-8');
+
+
 
 // Foto solo para Staff
 if (!$esCliente && $usuarioId > 0) {

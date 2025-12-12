@@ -243,7 +243,7 @@ function fmt_fecha(?string $d): string {
                 </td>
                 <td data-label="Nombre" class="fw-semibold"><?= htmlspecialchars($u['nombre']) ?></td>
                 <td data-label="Correo" class="text-muted"><?= htmlspecialchars($u['correo']) ?></td>
-                <td data-label="Rol"><span class="badge bg-secondary text-capitalize"><?= htmlspecialchars($u['rol']) ?></span></td>
+                <td data-label="Rol"><span class="badge bg-secondary text-capitalize"><?= htmlspecialchars($u['rol']) ?> <?php if (strtolower($u['nombre']) === 'cliente') continue; ?></span></td>
                 <td data-label="Estado">
                   <?php if ($u['activo']): ?><span class="badge bg-success">Activo</span>
                   <?php else: ?><span class="badge bg-secondary">Inactivo</span><?php endif; ?>
@@ -305,7 +305,7 @@ function fmt_fecha(?string $d): string {
           <div class="mb-3"><label class="form-label">Contraseña</label><input type="password" class="form-control" name="password" required></div>
           <div class="mb-3"><label class="form-label">Rol</label>
             <select class="form-select" name="rol_id" required>
-              <?php foreach ($roles as $rol): ?><option value="<?= $rol['id'] ?>"><?= htmlspecialchars($rol['nombre']) ?></option><?php endforeach; ?>
+              <?php foreach ($roles as $rol): ?><?php if (strtolower($rol['nombre']) === 'cliente') continue; ?><option value="<?= $rol['id'] ?>"><?= htmlspecialchars($rol['nombre']) ?></option><?php endforeach; ?>
             </select>
           </div>
           <div class="form-check"><input class="form-check-input" type="checkbox" name="activo" value="1" checked id="chkAct"><label class="form-check-label" for="chkAct">Activo</label></div>
@@ -319,26 +319,50 @@ function fmt_fecha(?string $d): string {
 <div class="modal fade" id="modalEditarUsuario" tabindex="-1">
   <div class="modal-dialog">
     <div class="modal-content">
-      <div class="modal-header"><h5 class="modal-title">Editar usuario</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-header">
+        <h5 class="modal-title">Editar usuario</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
       <form action="/Sistema-de-Saldos-y-Pagos-/Public/api/usuario_editar_admin.php" method="post">
         <div class="modal-body">
           <input type="hidden" name="id" id="edit_id">
-          <div class="mb-3"><label class="form-label">Nombre</label><input type="text" class="form-control" name="nombre" id="edit_nombre" required></div>
-          <div class="mb-3"><label class="form-label">Correo</label><input type="email" class="form-control" name="correo" id="edit_correo" required></div>
-          <div class="mb-3"><label class="form-label">Rol</label>
+          
+          <div class="mb-3">
+            <label class="form-label">Nombre</label>
+            <input type="text" class="form-control" name="nombre" id="edit_nombre" required>
+          </div>
+          
+          <div class="mb-3">
+            <label class="form-label">Correo</label>
+            <input type="email" class="form-control" name="correo" id="edit_correo" required>
+          </div>
+          
+          <div class="mb-3" id="divRolEdit">
+            <label class="form-label">Rol</label>
             <select class="form-select" name="rol_id" id="edit_rol_id" required>
-              <?php foreach ($roles as $rol): ?><option value="<?= $rol['id'] ?>"><?= htmlspecialchars($rol['nombre']) ?></option><?php endforeach; ?>
+              <?php foreach ($roles as $rol): ?>
+                <option value="<?= $rol['id'] ?>"><?= htmlspecialchars($rol['nombre']) ?></option>
+              <?php endforeach; ?>
             </select>
           </div>
-          <div class="mb-3"><label class="form-label">Nueva Contraseña (Opcional)</label><input type="password" class="form-control" name="password" placeholder="Dejar vacío para mantener actual"></div>
-          <div class="form-check"><input class="form-check-input" type="checkbox" name="activo" value="1" id="edit_activo"><label class="form-check-label" for="edit_activo">Activo</label></div>
+
+          <div class="mb-3">
+            <label class="form-label">Nueva Contraseña (Opcional)</label>
+            <input type="password" class="form-control" name="password" placeholder="Dejar vacío para mantener actual">
+          </div>
+          
+          <div class="form-check">
+            <input class="form-check-input" type="checkbox" name="activo" value="1" id="edit_activo">
+            <label class="form-check-label" for="edit_activo">Activo</label>
+          </div>
         </div>
-        <div class="modal-footer"><button type="submit" class="btn btn-primary">Guardar cambios</button></div>
+        <div class="modal-footer">
+            <button type="submit" class="btn btn-primary">Guardar cambios</button>
+        </div>
       </form>
     </div>
   </div>
 </div>
-<?php endif; ?>
 
 
 
@@ -384,5 +408,39 @@ function confirmarAccion(event, titulo, texto, btnTexto, colorBtn) {
   });
 }
 </script>
+
+<script>
+  function abrirModalEditar(user) {
+  // 1. Llenar datos
+  document.getElementById('edit_id').value = user.id;
+  document.getElementById('edit_nombre').value = user.nombre;
+  document.getElementById('edit_correo').value = user.correo;
+  document.getElementById('edit_activo').checked = (user.activo == 1);
+
+  // 2. Manejo del Rol
+  const rolSelect = document.getElementById('edit_rol_id');
+  const divRol = document.getElementById('divRolEdit');
+
+  // Seleccionar el rol actual del usuario en el select
+  if (user.rol_id) {
+      rolSelect.value = user.rol_id;
+  }
+
+  // 3. OCULTAR SI ES CLIENTE
+  // Usamos el nombre del rol para decidir
+  const nombreRol = (user.rol || '').toLowerCase();
+
+  if (nombreRol === 'cliente') {
+      divRol.style.display = 'none'; // Se oculta visualmente, pero el dato se envía
+  } else {
+      divRol.style.display = 'block'; // Se muestra para Admins/Operadores
+  }
+
+  // 4. Abrir el modal
+  new bootstrap.Modal(document.getElementById('modalEditarUsuario')).show();
+}
+</script>
+
+<?php endif; ?>
 
 <?php require_once __DIR__ . '/../Includes/footer.php'; ?>

@@ -22,8 +22,7 @@ if ($pagoId <= 0) die("ID de pago inválido.");
 
 $pdo = db();
 
-// 2. Obtener datos del Pago, Cliente y Cargo
-// Hacemos JOINs para tener toda la info en una sola consulta
+// 1. OBTENER DATOS (Incluyendo RFC del Emisor)
 $sql = "
     SELECT 
         p.id as pago_id, 
@@ -36,17 +35,27 @@ $sql = "
         c.correo, 
         c.telefono,
         cg.periodo_inicio, 
-        cg.periodo_fin
+        cg.periodo_fin,
+        -- Traemos datos del RFC Emisor desde la orden
+        r.razon_social as emisor_razon, 
+        r.rfc as emisor_rfc
     FROM pagos p
     JOIN ordenes o ON o.id = p.orden_id
     JOIN clientes c ON c.id = o.cliente_id
     LEFT JOIN cargos cg ON cg.id = p.cargo_id
+    LEFT JOIN company_rfcs r ON r.id = o.rfc_id
     WHERE p.id = ?
     LIMIT 1
 ";
 $st = $pdo->prepare($sql);
 $st->execute([$pagoId]);
 $datos = $st->fetch(PDO::FETCH_ASSOC);
+
+if (!$datos) die("El pago no existe.");
+
+// 2. DEFINIR DATOS DEL EMISOR (Corrección del error Undefined variable)
+$emisorNombre = $datos['emisor_razon'] ?: 'Banana Group Marketing';
+$emisorRFC    = $datos['emisor_rfc'] ? ('RFC: ' . $datos['emisor_rfc']) : 'info@bananagroup.mx';
 
 if (!$datos) die("El pago no existe o fue eliminado.");
 
@@ -58,6 +67,8 @@ if (!empty($datos['cargo_id'])) {
     $stItems->execute([$datos['cargo_id']]);
     $items = $stItems->fetchAll(PDO::FETCH_ASSOC);
 }
+
+
 
 // 4. Preparar variables para el PDF
 $folio         = str_pad((string)$datos['pago_id'], 6, '0', STR_PAD_LEFT); // Ej: 000123
@@ -150,8 +161,8 @@ $html = '
                 <td>
                     <div class="label">EMISOR</div>
                     <div class="value">
-                        <strong>Banana Group Marketing</strong><br>
-                        Soluciones Digitales<br>
+                        <strong>' . htmlspecialchars($emisorNombre) . '</strong><br>
+                        ' . htmlspecialchars($emisorRFC) . '<br>
                         info@bananagroup.mx
                     </div>
                 </td>
