@@ -853,3 +853,46 @@ $vistaRapidaTxt = $vistaRapida ? implode(' · ', $vistaRapida) : '—';
 })();
 </script>
 
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    // 2. Leer los parámetros de la URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const errorMsg = urlParams.get('err'); // Busca si existe ?err=...
+    const successMsg = urlParams.get('msg'); // Busca si existe ?msg=... (éxito)
+
+    // 3. Si hay error, mostrar SweetAlert de Error
+    if (errorMsg) {
+        Swal.fire({
+            icon: 'error',
+            title: 'Acción Bloqueada',
+            text: decodeURIComponent(errorMsg), // Decodificar el texto
+            confirmButtonColor: '#d33',
+            confirmButtonText: 'Entendido'
+        }).then(() => {
+            // Opcional: Limpiar la URL para que si recarga no salga otra vez
+            limpiarUrl();
+        });
+    }
+
+    // 4. (Opcional) Si hay éxito, mostrar SweetAlert de Éxito
+    if (successMsg) {
+        Swal.fire({
+            icon: 'success',
+            title: '¡Listo!',
+            text: decodeURIComponent(successMsg),
+            confirmButtonColor: '#3085d6',
+            timer: 3000 // Se cierra solo a los 3 seg
+        }).then(() => {
+            limpiarUrl();
+        });
+    }
+
+    function limpiarUrl() {
+        // Borra los parámetros GET de la barra de direcciones sin recargar
+        const newUrl = window.location.protocol + "//" + window.location.host + window.location.pathname + '?m=cobro&orden_id=' + urlParams.get('orden_id');
+        window.history.pushState({path: newUrl}, '', newUrl);
+    }
+});
+</script>
