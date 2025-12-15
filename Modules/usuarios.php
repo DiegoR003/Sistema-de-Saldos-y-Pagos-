@@ -178,40 +178,58 @@ function fmt_fecha(?string $d): string {
     </div>
 
     <div class="accordion-item">
-      <h2 class="accordion-header" id="headingPassword">
-        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapsePassword" aria-expanded="false" aria-controls="collapsePassword">
-          <i class="bi bi-key me-2"></i> Cambiar contraseña
-        </button>
-      </h2>
-      <div id="collapsePassword" class="accordion-collapse collapse" aria-labelledby="headingPassword" data-bs-parent="#accordionConfig">
-        <div class="accordion-body">
-          <form action="/Sistema-de-Saldos-y-Pagos-/Public/api/usuario_cambiar_password.php" method="post"
-                onsubmit="confirmarAccion(event, '¿Cambiar contraseña?', 'Deberás usar la nueva contraseña en tu próximo inicio de sesión.', 'Sí, cambiar', '#0d6efd')">
-            <input type="hidden" name="id" value="<?= $me['id'] ?>">
-            <div class="row g-3">
-              <div class="col-md-4">
-                <label class="form-label fw-semibold small">Contraseña actual</label>
-                <input type="password" class="form-control" name="password_actual" required>
-                
-              </div>
-              <div class="col-md-4">
-                <label class="form-label fw-semibold small">Nueva contraseña</label>
-                <input type="password" class="form-control" name="password_nueva" required minlength="6">
-              </div>
-              <div class="col-md-4">
-                <label class="form-label fw-semibold small">Confirmar nueva</label>
-                <input type="password" class="form-control" name="password_confirmar" required>
-              </div>
+  <h2 class="accordion-header" id="headingPassword">
+    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapsePassword" aria-expanded="false" aria-controls="collapsePassword">
+      <i class="bi bi-key me-2"></i> Cambiar contraseña
+    </button>
+  </h2>
+  <div id="collapsePassword" class="accordion-collapse collapse" aria-labelledby="headingPassword" data-bs-parent="#accordionConfig">
+    <div class="accordion-body">
+      <form action="/Sistema-de-Saldos-y-Pagos-/Public/api/usuario_cambiar_password.php" method="post"
+            onsubmit="confirmarAccion(event, '¿Cambiar contraseña?', 'Deberás usar la nueva contraseña en tu próximo inicio de sesión.', 'Sí, cambiar', '#0d6efd')">
+        <input type="hidden" name="id" value="<?= $me['id'] ?>">
+        
+        <div class="row g-3">
+          <div class="col-md-4">
+            <label class="form-label fw-semibold small">Contraseña actual</label>
+            <div class="input-group">
+                <input type="password" class="form-control bg-white" name="password_actual" id="currentPass" required>
+                <button class="btn btn-outline-secondary bg-white" type="button" onclick="togglePassword('currentPass', 'iconCurrent')" style="border-left: 0;">
+                    <i class="bi bi-eye" id="iconCurrent"></i>
+                </button>
             </div>
-            <div class="mt-3">
-              <button type="submit" class="btn btn-outline-primary btn-sm"><i class="bi bi-shield-lock me-1"></i> Actualizar contraseña</button>
+          </div>
+
+          <div class="col-md-4">
+            <label class="form-label fw-semibold small">Nueva contraseña</label>
+            <div class="input-group">
+                <input type="password" class="form-control bg-white" name="password_nueva" id="newPass" required minlength="6">
+                <button class="btn btn-outline-secondary bg-white" type="button" onclick="togglePassword('newPass', 'iconNew')" style="border-left: 0;">
+                    <i class="bi bi-eye" id="iconNew"></i>
+                </button>
             </div>
-          </form>
+          </div>
+
+          <div class="col-md-4">
+            <label class="form-label fw-semibold small">Confirmar nueva</label>
+            <div class="input-group">
+                <input type="password" class="form-control bg-white" name="password_confirmar" id="confPass" required>
+                <button class="btn btn-outline-secondary bg-white" type="button" onclick="togglePassword('confPass', 'iconConf')" style="border-left: 0;">
+                    <i class="bi bi-eye" id="iconConf"></i>
+                </button>
+            </div>
+          </div>
         </div>
-      </div>
+
+        <div class="mt-3">
+          <button type="submit" class="btn btn-outline-primary btn-sm">
+            <i class="bi bi-shield-lock me-1"></i> Actualizar contraseña
+          </button>
+        </div>
+      </form>
     </div>
   </div>
-
+</div>
   <?php if ($isAdmin): ?>
   <div class="card shadow-sm">
     <div class="card-header bg-white d-flex justify-content-between align-items-center py-3">
@@ -303,7 +321,16 @@ function fmt_fecha(?string $d): string {
         <div class="modal-body">
           <div class="mb-3"><label class="form-label">Nombre</label><input type="text" class="form-control" name="nombre" required></div>
           <div class="mb-3"><label class="form-label">Correo</label><input type="email" class="form-control" name="correo" required></div>
-          <div class="mb-3"><label class="form-label">Contraseña</label><input type="password" class="form-control" name="password" required></div>
+         <div class="mb-3">
+    <label class="form-label">Contraseña</label>
+    <div class="input-group">
+        <input type="password" class="form-control bg-white" name="password" id="passUsuario" required>
+        
+        <button class="btn btn-outline-secondary bg-white" type="button" onclick="togglePassword('passUsuario', 'iconUsuario')" style="border-left: 0;">
+            <i class="bi bi-eye" id="iconUsuario"></i>
+        </button>
+    </div>
+</div>
           <div class="mb-3"><label class="form-label">Rol</label>
             <select class="form-select" name="rol_id" required>
               <?php foreach ($roles as $rol): ?><?php if (strtolower($rol['nombre']) === 'cliente') continue; ?><option value="<?= $rol['id'] ?>"><?= htmlspecialchars($rol['nombre']) ?></option><?php endforeach; ?>
@@ -316,6 +343,8 @@ function fmt_fecha(?string $d): string {
     </div>
   </div>
 </div>
+
+   
 
 <div class="modal fade" id="modalEditarUsuario" tabindex="-1">
   <div class="modal-dialog">
@@ -338,19 +367,29 @@ function fmt_fecha(?string $d): string {
             <input type="email" class="form-control" name="correo" id="edit_correo" required>
           </div>
           
-          <div class="mb-3" id="divRolEdit">
-            <label class="form-label">Rol</label>
-            <select class="form-select" name="rol_id" id="edit_rol_id" required>
-              <?php foreach ($roles as $rol): ?>
-                <option value="<?= $rol['id'] ?>"><?= htmlspecialchars($rol['nombre']) ?></option>
-              <?php endforeach; ?>
-            </select>
-          </div>
+         <div class="mb-3" id="divRolEdit">
+    <label class="form-label">Rol</label>
+    <select class="form-select" name="rol_id" id="edit_rol_id" required>
+        <?php foreach ($roles as $rol): ?>
+            
+            <?php if (strtolower($rol['nombre']) === 'cliente') continue; ?>
+            
+            <option value="<?= $rol['id'] ?>"><?= htmlspecialchars($rol['nombre']) ?></option>
+        <?php endforeach; ?>
+    </select>
+</div>
 
           <div class="mb-3">
-            <label class="form-label">Nueva Contraseña (Opcional)</label>
-            <input type="password" class="form-control" name="password" placeholder="Dejar vacío para mantener actual">
-          </div>
+    <label class="form-label">Nueva Contraseña</label>
+    
+    <div class="input-group">
+        <input type="password" class="form-control bg-white" name="password" id="passLogin" placeholder="Dejar vacío para mantener actual">
+        
+        <button class="btn btn-outline-secondary bg-white" type="button" onclick="togglePassword('passLogin', 'iconLogin')" style="border-left: 0;">
+            <i class="bi bi-eye" id="iconLogin"></i>
+        </button>
+    </div>
+</div>
           
           <div class="form-check">
             <input class="form-check-input" type="checkbox" name="activo" value="1" id="edit_activo">
@@ -439,6 +478,23 @@ function confirmarAccion(event, titulo, texto, btnTexto, colorBtn) {
 
   // 4. Abrir el modal
   new bootstrap.Modal(document.getElementById('modalEditarUsuario')).show();
+}
+</script>
+
+<script>
+function togglePassword(inputId, iconId) {
+  const input = document.getElementById(inputId);
+  const icon = document.getElementById(iconId);
+
+  if (input.type === "password") {
+    input.type = "text";
+    icon.classList.remove("bi-eye");
+    icon.classList.add("bi-eye-slash"); // Cambia al icono de "ojo tachado"
+  } else {
+    input.type = "password";
+    icon.classList.remove("bi-eye-slash");
+    icon.classList.add("bi-eye"); // Vuelve al icono normal
+  }
 }
 </script>
 
