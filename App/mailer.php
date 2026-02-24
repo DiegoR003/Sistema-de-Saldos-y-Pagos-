@@ -9,18 +9,23 @@ use PHPMailer\PHPMailer\SMTP;
 // Ajusta la ruta al autoload si tu estructura es diferente
 require_once __DIR__ . '/../vendor/autoload.php';
 
-/* ==================================================
-   CONFIGURACIÓN SMTP (Edita esto con tus datos)
-   ================================================== */
-// Ejemplo para GMAIL (requiere Contraseña de Aplicación)
-const MAIL_HOST = 'smtp.gmail.com'; 
-const MAIL_USER = 'diegomossonava248@gmail.com';
-const MAIL_PASS = 'yfzz hlbr bnpi qwbc'; // NO tu contraseña normal
-const MAIL_PORT = 465; // o 587 con TLS
-const MAIL_SECURE = PHPMailer::ENCRYPTION_SMTPS; // o PHPMailer::ENCRYPTION_STARTTLS
+require_once __DIR__ . '/bootstrap.php';
 
-// Nombre que aparecerá como remitente
-const MAIL_FROM_NAME = 'Banana Group Notificaciones';
+/* ==================================================
+   CONFIGURACIÓN SMTP 
+   ================================================== */
+   
+$mail->Host = env('MAIL_HOST', 'smtp.gmail.com');
+$mail->Username = env('MAIL_USER');
+$mail->Password = env('MAIL_PASS');
+$mail->Port = (int) env('MAIL_PORT', 465);
+
+$secure = env('MAIL_SECURE', 'ssl'); // ssl | tls
+$mail->SMTPSecure = ($secure === 'tls')
+    ? PHPMailer::ENCRYPTION_STARTTLS
+    : PHPMailer::ENCRYPTION_SMTPS;
+
+$mail->setFrom(env('MAIL_USER'), env('MAIL_FROM_NAME', 'Banana Group Notificaciones'));
 
 /**
  * Función genérica para enviar correos.

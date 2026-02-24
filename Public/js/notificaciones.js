@@ -5,6 +5,11 @@
 (function () {
   'use strict';
 
+  const DBG = (window.APP_DEBUG === true);
+const log  = (...a) => DBG && log(...a);
+const warn = (...a) => DBG && warn(...a);
+const err  = (...a) => error(...a);
+
   // ============================================================
   // 📢 CONFIGURACIÓN DE SONIDO
   // ============================================================
@@ -70,31 +75,36 @@
   // ============================================================
   
   // Verificar configuración
-  if (!window.APP_USER || !window.PUSHER_CONFIG || !APP_USER.id) {
-    console.warn('❌ Pusher: Faltan configuraciones de usuario.');
-    return;
-  }
+ if (!window.APP_USER || !window.PUSHER_CONFIG || !window.APP_USER.id) {
+  warn('❌ Pusher: Faltan configuraciones de usuario.');
+  return;
+}
 
-  const { id } = APP_USER;
-  const { key, cluster } = PUSHER_CONFIG;
+const { id } = window.APP_USER;
+const { key, cluster } = window.PUSHER_CONFIG;
+
+if (!key || !cluster) {
+  error('❌ Pusher: key/cluster vacíos. Revisa window.PUSHER_CONFIG y tu .env');
+  return;
+}
 
   // Prevenir múltiples inicializaciones
   if (window.pusherInitialized) {
-    console.log('⚠️ Pusher ya está inicializado, saltando...');
+    log('⚠️ Pusher ya está inicializado, saltando...');
     return;
   }
   window.pusherInitialized = true;
 
   // Inicializar Pusher
-  const pusher = new Pusher(key, {
-    cluster: cluster,
+  const pusher = new Pusher(window.PUSHER_CONFIG.key, {
+    cluster: window.PUSHER_CONFIG.cluster,
     forceTLS: true
-  });
+});
 
   const channelName = `notificaciones_user_${id}`;
   const channel = pusher.subscribe(channelName);
   
-  console.log('📡 Pusher conectado. Escuchando canal:', channelName);
+  log('📡 Pusher conectado. Escuchando canal:', channelName);
 
   // Crear favicon con punto
   crearFaviconConPunto();
@@ -220,7 +230,7 @@
     audioNotif.currentTime = 0;
     
     audioNotif.play().catch(error => {
-      console.warn("🔇 El navegador bloqueó el sonido (requiere interacción previa):", error);
+      warn("🔇 El navegador bloqueó el sonido (requiere interacción previa):", error);
     });
   }
 
@@ -228,7 +238,7 @@
   // 📥 MANEJADOR PRINCIPAL: Nueva notificación
   // ============================================================
   function manejarNuevaNotificacion(data) {
-    console.log('🔔 Notificación recibida:', data);
+    log('🔔 Notificación recibida:', data);
     
     const notificacion = (typeof data === 'string') ? JSON.parse(data) : data;
     
@@ -252,12 +262,12 @@
 
   // Confirmar suscripción
   channel.bind('pusher:subscription_succeeded', function() {
-    console.log('✅ Suscripción exitosa al canal:', channelName);
+    log('✅ Suscripción exitosa al canal:', channelName);
   });
 
   // Manejar errores
   channel.bind('pusher:subscription_error', function(error) {
-    console.error('❌ Error en la suscripción:', error);
+    error('❌ Error en la suscripción:', error);
   });
 
   // ============================================================
@@ -278,5 +288,5 @@
     }
   });
 
-  console.log('✅ Sistema de notificaciones inicializado correctamente');
+  log('✅ Sistema de notificaciones inicializado correctamente');
 })();

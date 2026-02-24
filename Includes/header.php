@@ -13,6 +13,7 @@ require_once __DIR__ . '/../App/bd.php';
 require_once __DIR__ . '/../App/auth.php';
 require_once __DIR__ . '/../App/notifications.php';
 require_once __DIR__ . '/../App/pusher_config.php';
+require_once __DIR__ . '/../App/bootstrap.php';
 
 if (session_status() === PHP_SESSION_NONE) session_start();
 
@@ -153,16 +154,27 @@ $notificacionesJSON = json_encode($notificaciones);
 
   <!-- Script INLINE para ejecutar ANTES que todo -->
   <script>
+
+      window.APP_DEBUG = <?php echo (env('APP_DEBUG', 'false') === 'true') ? 'true' : 'false'; ?>;
+
+  // 🔇 Silencia logs en producción
+  if (window.APP_DEBUG !== true) {
+    console.log = () => {};
+    console.warn = () => {};
+    // console.error NO lo apagues (errores sí conviene verlos)
+  }
+    
   window.APP_USER = {
     id: <?php echo (int)($usuarioId ?? 0); ?>,
     rol: "<?php echo htmlspecialchars($usuarioRol ?? 'guest'); ?>",
     clienteId: <?php echo (int)($clienteId ?? 0); ?>,
     esCliente: <?php echo $esCliente ? 'true' : 'false'; ?>
   };
-  window.PUSHER_CONFIG = {
-    key: "<?php echo defined('PUSHER_APP_KEY') ? PUSHER_APP_KEY : ''; ?>",
-    cluster: "<?php echo defined('PUSHER_APP_CLUSTER') ? PUSHER_APP_CLUSTER : ''; ?>"
-  };
+  
+ window.PUSHER_CONFIG = {
+  key: "<?php echo htmlspecialchars(env('PUSHER_APP_KEY', ''), ENT_QUOTES, 'UTF-8'); ?>",
+  cluster: "<?php echo htmlspecialchars(env('PUSHER_APP_CLUSTER', ''), ENT_QUOTES, 'UTF-8'); ?>"
+};
   
   // Notificaciones cargadas desde BD
   window.NOTIFICACIONES_INICIALES = <?php echo $notificacionesJSON; ?>;

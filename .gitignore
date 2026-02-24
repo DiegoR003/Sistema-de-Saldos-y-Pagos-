@@ -1,0 +1,11 @@
+.env
+.env.*
+!.env.example
+
+/vendor/
+Public/vendor/
+node_modules/
+
+*.log
+.DS_Store
+Thumbs.db
