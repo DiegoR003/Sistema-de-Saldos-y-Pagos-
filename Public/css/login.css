@@ -1,0 +1,324 @@
+   
+body{
+    background-color: #87CEFA;
+}
+
+h1{
+    color: #fff;
+    font-family: "arial", serif;
+ }
+
+    /* Reset & base */
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0;
+  font-family: 'Nunito', system-ui, -apple-system, Segoe UI, Roboto, 'Helvetica Neue', Arial, sans-serif;
+  color: #2a2a2a;
+  background: #fff;
+}
+
+/* Layout */
+.page {
+  min-height: 100%;
+  display: grid;
+  place-items: center;
+  padding: 200px 16px; /* espacio entre titulo y form */
+  
+}
+
+.brand {
+  color: #212529;
+  font-weight: 700;
+  font-size: clamp(28px, 4vw, 48px);
+  font-family: "Overpass", sans-serif;
+  margin: 0;
+  letter-spacing: 0.5px;
+}
+
+/* Card */
+.card {
+  position: relative;
+  width: min(520px, 92vw);
+  background: #fff;
+  border-radius: 4px;
+  box-shadow: 0 10px 24px rgba(0,0,0,.15);
+  padding: 22px 28px 26px;
+}
+
+.card-topbar {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 6px;
+  background: #22a6f2;
+  border-top-left-radius: 4px;
+  border-top-right-radius: 4px;
+}
+
+.card-title {
+  text-align: center;
+  font-size: 16px;
+  color: #6b6f72;
+  font-weight: 600;
+  margin: 8px 0 14px;
+}
+
+/* Form fields */
+.form { display: grid; gap: 12px; }
+
+.field {
+  position: relative;
+  display: block;
+}
+
+.field input {
+  width: 100%;
+  padding: 12px 44px 12px 12px; /* espacio para el icono */
+  border: 1px solid #d7dbe0;
+  border-radius: 4px;
+  outline: none;
+  font-size: 14px;
+  transition: box-shadow .2s ease, border-color .2s ease;
+}
+
+.field input::placeholder { color: #b2b6bb; }
+
+.field input:focus {
+  border-color: #22a6f2;
+  box-shadow: 0 0 0 3px rgba(34,166,242,.15);
+}
+
+/* Icono a la derecha */
+.with-icon-right .icon {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 22px; height: 22px;
+  display: inline-grid;
+  place-items: center;
+  pointer-events: none;
+  color: #7d8a97;
+}
+
+.with-icon-right .icon svg {
+  width: 20px; height: 20px;
+  fill: currentColor;
+}
+
+/* Agrega esto a tus estilos */
+.with-icon-right .clickable-icon {
+  pointer-events: auto; /* Permite que el icono reciba clics */
+  cursor: pointer;
+  transition: color 0.2s ease;
+}
+
+.with-icon-right .clickable-icon:hover {
+  color: #22a6f2; /* Le da color al pasar el cursor para indicar que es clickeable */
+}
+
+/* Botón */
+.btn {
+  display: block;
+  width: 100%;
+  border: none;
+  border-radius: 3px;
+  padding: 12px 14px;
+  font-size: 14px;
+  font-weight: 700;
+  color: #fff;
+  background: #2b7fb8;
+  cursor: pointer;
+  margin-top: 10px;
+  transition: filter .2s ease, transform .02s ease-in;
+}
+
+.btn:hover { filter: brightness(1.05); background: #fff2a8; }
+.btn:active { transform: translateY(1px); }
+
+/* A11y */
+.sr-only {
+  position: absolute !important;
+  height: 1px; width: 1px;
+  overflow: hidden;
+  clip: rect(1px,1px,1px,1px);
+  white-space: nowrap;
+}
+
+
+
+/* Animaciones para las bananas */
+.banana{
+  position: absolute;
+  right: 5%;
+  bottom: 2%;
+  z-index: -1;
+
+   /* Animación */
+  animation: rotateBanana 15s linear infinite;
+}
+
+@keyframes rotateBanana {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.banana2{
+  position: absolute;
+  left: 5%;
+  bottom: 30%;
+  z-index: -1;
+
+   /* Animación */
+  animation: rotateBanana2 15s linear infinite;
+}
+
+@keyframes rotateBanana2 {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.banana3{
+  position: absolute;
+  right: 5%;
+  bottom: 58%;
+  z-index: -1;
+
+   /* Animación */
+  animation: rotateBanana3 15s linear infinite;
+}
+
+@keyframes rotateBanana3 {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.banana4{
+  position: absolute;
+  left: 5%;
+  bottom: 80%;
+  z-index: -1;
+
+   /* Animación */
+  animation: rotateBanana4 15s linear infinite;
+}
+
+@keyframes rotateBanana4 {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+
+/* Animación de la búrbuja*/
+
+.bubble {
+  position: absolute;
+  bottom: 25%;
+  left: 2%;
+  z-index: -1; 
+}
+
+:root{
+  --decor-speed: 6s;
+  --decor-amp: 12px;
+  --blob1: #fff2a8; /* crema */
+  --blob2: #ffe36d; /* amarillo */
+}
+
+/* Colores de fondo suaves */
+body { background:#fffbee; }
+
+/* Capa de decoraciones detrás del contenido */
+.bg-decor{
+  position:fixed; inset:0; z-index:0;
+  pointer-events:none; /* no bloquea clics */
+  overflow:hidden;
+}
+.decor{ position:absolute; user-select:none; opacity:.9; will-change:transform; }
+
+/* Blobs (manchas) sin imágenes */
+.blob{ position:absolute; border-radius:50%; filter:blur(20px); opacity:.35; }
+.blob-1{
+  width:42vw; height:42vw; max-width:720px; max-height:720px;
+  top:-15vw; right:-12vw;
+  background: radial-gradient(circle at 30% 30%, var(--blob2), var(--blob1));
+  animation: floatY calc(var(--decor-speed) * 1.5) ease-in-out infinite;
+}
+.blob-2{
+  width:22vw; height:22vw; max-width:420px; max-height:420px;
+  bottom:-8vw; left:-10vw;
+  background: radial-gradient(circle at 40% 40%, var(--blob1), var(--blob2));
+  animation: floatY calc(var(--decor-speed) * 1.1) ease-in-out infinite reverse;
+}
+
+/* Piezas sutiles (posiciones no interfieren con la UI) */
+
+.decor-lupa{ top:33vh; left:30vw; width:44px;
+  animation: sway var(--decor-speed) ease-in-out infinite, floatY calc(var(--decor-speed)*1.2) ease-in-out infinite;
+}
+.decor-plane{ top:75vh; left:420px; width:356px;
+  animation: planeMove 18s linear infinite, floatY calc(var(--decor-speed)*.9) ease-in-out infinite;
+}
+
+/* Logo fijo arriba-izquierda  */
+.login-logo{
+  position:fixed; top:24px; left:32px; z-index:2; text-decoration:none;
+}
+.login-logo img{ height:60px; display:block; }
+
+/* Animaciones */
+@keyframes spin{ from{transform:rotate(0)} to{transform:rotate(360deg)} }
+@keyframes floatY{ 0%,100%{transform:translateY(0)} 50%{transform:translateY(calc(var(--decor-amp)*-1))} }
+@keyframes sway{ 0%,100%{transform:rotate(-6deg)} 50%{transform:rotate(6deg)} }
+@keyframes planeMove{
+  0%{ transform:translateX(0) translateY(0) rotate(-6deg); }
+  50%{ transform:translateX(55vw) translateY(-3vh) rotate(2deg); }
+  100%{ transform:translateX(105vw) translateY(0) rotate(0deg); }
+}
+
+/* Accesibilidad */
+@media (prefers-reduced-motion: reduce){
+  .blob, .decor{ animation:none !important; }
+}
+
+
+
+
+/* Responsive */
+@media (max-width: 420px) {
+  .card-title { font-size: 15px; }
+  .btn { padding: 12px; }
+  .page{ padding: 250px 16px;   }
+}
+
+/* Estilo para el link de "Olvidé mi contraseña" */
+.forgot-password-link {
+    color: #6c757d;
+    font-size: 0.9rem;
+    text-decoration: none;
+    transition: all 0.3s ease;
+    display: inline-block;
+    padding: 5px 10px;
+}
+
+.forgot-password-link:hover {
+    color: #fdd835; /* Amarillo Banana */
+    transform: translateY(-2px); /* Pequeño efecto de elevación */
+    text-decoration: underline;
+}

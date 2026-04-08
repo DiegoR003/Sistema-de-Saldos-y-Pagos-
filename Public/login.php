@@ -106,6 +106,8 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@300;400;600;700&display=swap" rel="stylesheet">
 
+    
+
      <!-- Fuentes -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -117,323 +119,10 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
         integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH"
         crossorigin="anonymous"
     >
+
+    <link rel="stylesheet" href="./css/login.css">
 </head>
-<style>
-    
-body{
-    background-color: #87CEFA;
-}
 
-h1{
-    color: #fff;
-    font-family: "arial", serif;
- }
-
-    /* Reset & base */
-* { box-sizing: border-box; }
-html, body { height: 100%; }
-body {
-  margin: 0;
-  font-family: 'Nunito', system-ui, -apple-system, Segoe UI, Roboto, 'Helvetica Neue', Arial, sans-serif;
-  color: #2a2a2a;
-  background: #fff;
-}
-
-/* Layout */
-.page {
-  min-height: 100%;
-  display: grid;
-  place-items: center;
-  padding: 200px 16px; /* espacio entre titulo y form */
-  
-}
-
-.brand {
-  color: #212529;
-  font-weight: 700;
-  font-size: clamp(28px, 4vw, 48px);
-  font-family: "Overpass", sans-serif;
-  margin: 0;
-  letter-spacing: 0.5px;
-}
-
-/* Card */
-.card {
-  position: relative;
-  width: min(520px, 92vw);
-  background: #fff;
-  border-radius: 4px;
-  box-shadow: 0 10px 24px rgba(0,0,0,.15);
-  padding: 22px 28px 26px;
-}
-
-.card-topbar {
-  position: absolute;
-  top: 0; left: 0; right: 0;
-  height: 6px;
-  background: #22a6f2;
-  border-top-left-radius: 4px;
-  border-top-right-radius: 4px;
-}
-
-.card-title {
-  text-align: center;
-  font-size: 16px;
-  color: #6b6f72;
-  font-weight: 600;
-  margin: 8px 0 14px;
-}
-
-/* Form fields */
-.form { display: grid; gap: 12px; }
-
-.field {
-  position: relative;
-  display: block;
-}
-
-.field input {
-  width: 100%;
-  padding: 12px 44px 12px 12px; /* espacio para el icono */
-  border: 1px solid #d7dbe0;
-  border-radius: 4px;
-  outline: none;
-  font-size: 14px;
-  transition: box-shadow .2s ease, border-color .2s ease;
-}
-
-.field input::placeholder { color: #b2b6bb; }
-
-.field input:focus {
-  border-color: #22a6f2;
-  box-shadow: 0 0 0 3px rgba(34,166,242,.15);
-}
-
-/* Icono a la derecha */
-.with-icon-right .icon {
-  position: absolute;
-  right: 10px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 22px; height: 22px;
-  display: inline-grid;
-  place-items: center;
-  pointer-events: none;
-  color: #7d8a97;
-}
-
-.with-icon-right .icon svg {
-  width: 20px; height: 20px;
-  fill: currentColor;
-}
-
-/* Botón */
-.btn {
-  display: block;
-  width: 100%;
-  border: none;
-  border-radius: 3px;
-  padding: 12px 14px;
-  font-size: 14px;
-  font-weight: 700;
-  color: #fff;
-  background: #2b7fb8;
-  cursor: pointer;
-  margin-top: 10px;
-  transition: filter .2s ease, transform .02s ease-in;
-}
-
-.btn:hover { filter: brightness(1.05); background: #fff2a8; }
-.btn:active { transform: translateY(1px); }
-
-/* A11y */
-.sr-only {
-  position: absolute !important;
-  height: 1px; width: 1px;
-  overflow: hidden;
-  clip: rect(1px,1px,1px,1px);
-  white-space: nowrap;
-}
-
-
-
-/* Animaciones para las bananas */
-.banana{
-  position: absolute;
-  right: 5%;
-  bottom: 2%;
-  z-index: -1;
-
-   /* Animación */
-  animation: rotateBanana 15s linear infinite;
-}
-
-@keyframes rotateBanana {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-.banana2{
-  position: absolute;
-  left: 5%;
-  bottom: 30%;
-  z-index: -1;
-
-   /* Animación */
-  animation: rotateBanana2 15s linear infinite;
-}
-
-@keyframes rotateBanana2 {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-.banana3{
-  position: absolute;
-  right: 5%;
-  bottom: 58%;
-  z-index: -1;
-
-   /* Animación */
-  animation: rotateBanana3 15s linear infinite;
-}
-
-@keyframes rotateBanana3 {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-.banana4{
-  position: absolute;
-  left: 5%;
-  bottom: 80%;
-  z-index: -1;
-
-   /* Animación */
-  animation: rotateBanana4 15s linear infinite;
-}
-
-@keyframes rotateBanana4 {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-
-/* Animación de la búrbuja*/
-
-.bubble {
-  position: absolute;
-  bottom: 25%;
-  left: 2%;
-  z-index: -1; 
-}
-
-:root{
-  --decor-speed: 6s;
-  --decor-amp: 12px;
-  --blob1: #fff2a8; /* crema */
-  --blob2: #ffe36d; /* amarillo */
-}
-
-/* Colores de fondo suaves */
-body { background:#fffbee; }
-
-/* Capa de decoraciones detrás del contenido */
-.bg-decor{
-  position:fixed; inset:0; z-index:0;
-  pointer-events:none; /* no bloquea clics */
-  overflow:hidden;
-}
-.decor{ position:absolute; user-select:none; opacity:.9; will-change:transform; }
-
-/* Blobs (manchas) sin imágenes */
-.blob{ position:absolute; border-radius:50%; filter:blur(20px); opacity:.35; }
-.blob-1{
-  width:42vw; height:42vw; max-width:720px; max-height:720px;
-  top:-15vw; right:-12vw;
-  background: radial-gradient(circle at 30% 30%, var(--blob2), var(--blob1));
-  animation: floatY calc(var(--decor-speed) * 1.5) ease-in-out infinite;
-}
-.blob-2{
-  width:22vw; height:22vw; max-width:420px; max-height:420px;
-  bottom:-8vw; left:-10vw;
-  background: radial-gradient(circle at 40% 40%, var(--blob1), var(--blob2));
-  animation: floatY calc(var(--decor-speed) * 1.1) ease-in-out infinite reverse;
-}
-
-/* Piezas sutiles (posiciones no interfieren con la UI) */
-
-.decor-lupa{ top:33vh; left:30vw; width:44px;
-  animation: sway var(--decor-speed) ease-in-out infinite, floatY calc(var(--decor-speed)*1.2) ease-in-out infinite;
-}
-.decor-plane{ top:75vh; left:420px; width:356px;
-  animation: planeMove 18s linear infinite, floatY calc(var(--decor-speed)*.9) ease-in-out infinite;
-}
-
-/* Logo fijo arriba-izquierda  */
-.login-logo{
-  position:fixed; top:24px; left:32px; z-index:2; text-decoration:none;
-}
-.login-logo img{ height:60px; display:block; }
-
-/* Animaciones */
-@keyframes spin{ from{transform:rotate(0)} to{transform:rotate(360deg)} }
-@keyframes floatY{ 0%,100%{transform:translateY(0)} 50%{transform:translateY(calc(var(--decor-amp)*-1))} }
-@keyframes sway{ 0%,100%{transform:rotate(-6deg)} 50%{transform:rotate(6deg)} }
-@keyframes planeMove{
-  0%{ transform:translateX(0) translateY(0) rotate(-6deg); }
-  50%{ transform:translateX(55vw) translateY(-3vh) rotate(2deg); }
-  100%{ transform:translateX(105vw) translateY(0) rotate(0deg); }
-}
-
-/* Accesibilidad */
-@media (prefers-reduced-motion: reduce){
-  .blob, .decor{ animation:none !important; }
-}
-
-
-
-
-/* Responsive */
-@media (max-width: 420px) {
-  .card-title { font-size: 15px; }
-  .btn { padding: 12px; }
-  .page{ padding: 250px 16px;   }
-}
-
-/* Estilo para el link de "Olvidé mi contraseña" */
-.forgot-password-link {
-    color: #6c757d;
-    font-size: 0.9rem;
-    text-decoration: none;
-    transition: all 0.3s ease;
-    display: inline-block;
-    padding: 5px 10px;
-}
-
-.forgot-password-link:hover {
-    color: #fdd835; /* Amarillo Banana */
-    transform: translateY(-2px); /* Pequeño efecto de elevación */
-    text-decoration: underline;
-}
-
-   </style>
 <body>
 
       <!-- Contenido del login -->
@@ -468,15 +157,15 @@ body { background:#fffbee; }
         </label>
 
         <label class="field with-icon-right">
-          <span class="sr-only">Contraseña</span>
-          <input type="password" name="password" autocomplete="current-password" placeholder="Contraseña" />
-          <span class="icon" aria-hidden="true">
-            <!-- lock icon -->
-            <svg viewBox="0 0 24 24" width="20" height="20">
-              <path d="M12 2a5 5 0 0 0-5 5v3H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1V11a1 1 0 0 0-1-1h-2V7a5 5 0 0 0-5-5zm3 8H9V7a3 3 0 1 1 6 0v3z" />
-            </svg>
-          </span>
-        </label>
+  <span class="sr-only">Contraseña</span>
+  <input type="password" name="password" id="passwordInput" autocomplete="current-password" placeholder="Contraseña" />
+  
+  <span class="icon clickable-icon" id="togglePassword" aria-hidden="true" title="Mostrar/Ocultar contraseña">
+    <svg id="eyeIcon" viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+      <path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/>
+    </svg>
+  </span>
+</label>
 
        <div class="text-center mt-3">
     <a href="#" class="text-decoration-none small text-muted link-hover" data-bs-toggle="modal" data-bs-target="#modalRecuperar">
@@ -552,7 +241,7 @@ body { background:#fffbee; }
                     <label for="recupEmail">Correo Electrónico</label>
                 </div>
                 <div class="d-grid">
-                    <button type="submit" class="btn btn-dark btn-lg" id="btnSendCode">
+                    <button type="submit" class="btn btn-lg" id="btnSendCode">
                         Enviar Código <i class="bi bi-arrow-right ms-2"></i>
                     </button>
                 </div>
@@ -575,19 +264,34 @@ body { background:#fffbee; }
                 </div>
                 
                 <div class="row g-2 mb-3">
-                    <div class="col-6">
-                        <label class="form-label small fw-bold">Nueva Contraseña</label>
-                        <input type="password" class="form-control" id="newPass" name="password" required minlength="6" placeholder="******">
-                    </div>
-                    <div class="col-6">
-                        <label class="form-label small fw-bold">Confirmar</label>
-                        <input type="password" class="form-control" id="confPass" required minlength="6" placeholder="******">
-                    </div>
-                </div>
+    <div class="col-6">
+        <label class="form-label small fw-bold">Nueva Contraseña</label>
+        <div class="field with-icon-right">
+            <input type="password" class="form-control" id="newPass" name="password" required minlength="6" placeholder="******">
+            <span class="icon clickable-icon toggle-password" data-target="newPass">
+                <svg class="eye-icon" viewBox="0 0 24 24" width="20" height="20">
+                    <path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/>
+                </svg>
+            </span>
+        </div>
+    </div>
+
+    <div class="col-6">
+        <label class="form-label small fw-bold">Confirmar</label>
+        <div class="field with-icon-right">
+            <input type="password" class="form-control" id="confPass" required minlength="6" placeholder="******">
+            <span class="icon clickable-icon toggle-password" data-target="confPass">
+                <svg class="eye-icon" viewBox="0 0 24 24" width="20" height="20">
+                    <path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/>
+                </svg>
+            </span>
+        </div>
+    </div>
+</div>
 
                 <div class="d-grid gap-2">
                     <button type="submit" class="btn btn-warning fw-bold">Actualizar Contraseña</button>
-                    <button type="button" class="btn btn-link btn-sm text-muted text-decoration-none" onclick="volverPaso1()">
+                    <button type="button" class="btn btn-light btn-link btn-sm text-muted text-decoration-none" onclick="volverPaso1()">
                         <i class="bi bi-arrow-left"></i> Correo equivocado
                     </button>
                 </div>
@@ -601,191 +305,10 @@ body { background:#fffbee; }
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
-<script>
-// 1. Enviar Código
-document.getElementById('formSendCode')?.addEventListener('submit', async function(e) {
-    e.preventDefault();
-    const btn = document.getElementById('btnSendCode');
-    const email = document.getElementById('recupEmail').value;
-    
-    const originalText = btn.innerHTML;
-    btn.disabled = true; btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Enviando...';
-
-    let fd = new FormData();
-    fd.append('email', email);
-
-    try {
-        const res = await fetch('api/auth_forgot_code.php', { method: 'POST', body: fd });
-        const data = await res.json();
-
-        if (data.ok) {
-            document.getElementById('finalEmail').value = email;
-            document.getElementById('step1').classList.add('d-none');
-            document.getElementById('step2').classList.remove('d-none');
-        } else {
-            Swal.fire('Error', data.msg || 'No se pudo enviar el correo', 'error');
-        }
-    } catch (err) {
-        Swal.fire('Error', 'Error de conexión con el servidor', 'error');
-    }
-    btn.disabled = false; btn.innerHTML = originalText;
-});
-
-// 2. Confirmar Cambio
-document.getElementById('formResetFinal')?.addEventListener('submit', async function(e) {
-    // ... resto del código duplicado
-});
-
-function volverPaso1() {
-    document.getElementById('step1').classList.remove('d-none');
-    document.getElementById('step2').classList.add('d-none');
-}
-</script>
-
-
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
-<script>
-  // Animación burbuja (está bien, no tocar)
-  const bubble = document.querySelector(".bubble");
-  let x = 100, y = 100;
-  let dx = 1, dy = 1;
-  const speed = 16;
+<script src="./js/login.js" defer></script>
 
-  function move() {
-    const w = window.innerWidth - bubble.offsetWidth;
-    const h = window.innerHeight - bubble.offsetHeight;
-    x += dx;
-    y += dy;
-    if (x <= 0 || x >= w) dx *= -1;
-    if (y <= 0 || y >= h) dy *= -1;
-    bubble.style.left = x + "px";
-    bubble.style.top = y + "px";
-    setTimeout(move, speed);
-  }
-  move();
-</script>
-
-<script>
-// 1. ENVIAR CÓDIGO (Paso 1)
-const formSend = document.getElementById('formSendCode');
-if (formSend) {
-    formSend.addEventListener('submit', async function(e) {
-        e.preventDefault();
-        const btn = document.getElementById('btnSendCode');
-        const email = document.getElementById('recupEmail').value;
-        
-        // Bloquear botón para evitar doble envío
-        if (btn.disabled) return; 
-        const txtOriginal = btn.innerHTML;
-        btn.disabled = true; 
-        btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Enviando...';
-
-        let fd = new FormData();
-        fd.append('email', email);
-
-        try {
-            const res = await fetch('api/auth_forgot_code.php', { method: 'POST', body: fd });
-            const data = await res.json();
-
-            if (data.ok) {
-                // ÉXITO: Guardamos el correo en el campo oculto del paso 2
-                document.getElementById('finalEmail').value = email; 
-                
-                // Cambiamos de pantalla
-                document.getElementById('step1').classList.add('d-none');
-                document.getElementById('step2').classList.remove('d-none');
-            } else {
-                Swal.fire('Error', data.msg || 'No se pudo enviar', 'error');
-                btn.disabled = false;
-                btn.innerHTML = txtOriginal;
-            }
-        } catch (err) {
-            console.error(err);
-            Swal.fire('Error', 'Error de conexión', 'error');
-            btn.disabled = false;
-            btn.innerHTML = txtOriginal;
-        }
-    });
-}
-
-// 2. CONFIRMAR CAMBIO (Paso 2 - Blindado contra doble clic)
-const formReset = document.getElementById('formResetFinal');
-if (formReset) {
-    formReset.addEventListener('submit', async function(e) {
-        e.preventDefault();
-        
-        // 1. OBTENER BOTÓN Y BLOQUEARLO
-        const btnSubmit = formReset.querySelector('button[type="submit"]');
-        if (btnSubmit.disabled) return; // Si ya está procesando, no hacer nada
-        
-        // Guardar texto original y poner "Cargando..."
-        const txtOriginal = btnSubmit.innerText;
-        btnSubmit.disabled = true;
-        btnSubmit.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Guardando...';
-
-        // 2. VALIDAR
-        const p1 = document.getElementById('newPass').value;
-        const p2 = document.getElementById('confPass').value;
-        
-        // Usamos el campo oculto o el del paso anterior como respaldo
-        const email = document.getElementById('finalEmail').value || document.getElementById('recupEmail').value;
-
-        if (p1 !== p2) {
-            Swal.fire('Error', 'Las contraseñas no coinciden', 'warning');
-            btnSubmit.disabled = false;
-            btnSubmit.innerText = txtOriginal;
-            return;
-        }
-
-        // 3. PREPARAR DATOS (Forzando el email)
-        let fd = new FormData(formReset);
-        fd.set('email', email); 
-
-        try {
-            const res = await fetch('api/auth_reset_final.php', { method: 'POST', body: fd });
-            const data = await res.json();
-
-            if (data.ok) {
-                // Ocultar modal primero
-                const modalEl = document.getElementById('modalRecuperar');
-                const modal = bootstrap.Modal.getInstance(modalEl);
-                if(modal) modal.hide();
-
-                Swal.fire({
-                    icon: 'success',
-                    title: '¡Contraseña Actualizada!',
-                    text: 'Inicia sesión con tu nueva clave.',
-                    confirmButtonColor: '#fdd835',
-                    allowOutsideClick: false
-                }).then(() => {
-                    window.location.reload(); // Recarga limpia
-                });
-            } else {
-                Swal.fire('Error', data.msg, 'error');
-                // Solo reactivar botón si falló (para que intente de nuevo)
-                btnSubmit.disabled = false;
-                btnSubmit.innerText = txtOriginal;
-            }
-        } catch (err) {
-            Swal.fire('Error', 'Error de red', 'error');
-            btnSubmit.disabled = false;
-            btnSubmit.innerText = txtOriginal;
-        }
-    });
-}
-
-function volverPaso1() {
-    document.getElementById('step2').classList.add('d-none');
-    document.getElementById('step1').classList.remove('d-none');
-    // Reactivar botón paso 1
-    const btn = document.getElementById('btnSendCode');
-    if(btn) {
-        btn.disabled = false;
-        btn.innerHTML = 'Enviar Código <i class="bi bi-arrow-right ms-2"></i>';
-    }
-}
-</script>
 </body>
 </html>
