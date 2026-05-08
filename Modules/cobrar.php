@@ -32,20 +32,20 @@ if ($vista === 'pagados') {
 }
 
 
-// --- Consulta: órdenes activas + cliente + suma mensual base (items recurrentes no pausados) ---
+// --- Consulta: órdenes activas + cliente + suma mensual base ---
 
 $sql = "
 SELECT
   o.id                                                AS orden_id,
-  ANY_VALUE(o.estado)                                 AS estado,
-  ANY_VALUE(o.proxima_facturacion)                    AS proxima_facturacion,
-  ANY_VALUE(o.billing_policy)                         AS billing_policy,
-  ANY_VALUE(o.rfc_id)                                 AS rfc_id,
+  MAX(o.estado)                                       AS estado,
+  MAX(o.proxima_facturacion)                          AS proxima_facturacion,
+  MAX(o.billing_policy)                               AS billing_policy,
+  MAX(o.rfc_id)                                       AS rfc_id,
 
-  ANY_VALUE(c.id)                                     AS cliente_id,
-  ANY_VALUE(c.empresa)                                AS empresa,
-  ANY_VALUE(c.correo)                                 AS correo,
-  ANY_VALUE(c.telefono)                               AS telefono,
+  MAX(c.id)                                           AS cliente_id,
+  MAX(c.empresa)                                       AS empresa,
+  MAX(c.correo)                                        AS correo,
+  MAX(c.telefono)                                      AS telefono,
 
   (
     SELECT COALESCE(SUM(monto), 0)
@@ -66,15 +66,13 @@ SELECT
 
 FROM ordenes o
 JOIN clientes c          ON c.id = o.cliente_id
-/* LEFT JOIN orden_items oi ... <-- ELIMINAMOS ESTE JOIN QUE CAUSABA EL BUG */
 LEFT JOIN cargos cg      ON cg.orden_id = o.id
 {$where}
 GROUP BY o.id
 {$having}
-ORDER BY ANY_VALUE(c.empresa) ASC
+ORDER BY MAX(c.empresa) ASC
 LIMIT 200
 ";
-
 
 
 $st = $pdo->prepare($sql);

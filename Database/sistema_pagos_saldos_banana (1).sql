@@ -8,6 +8,7 @@
 -- Versión de PHP: 8.2.18
 
 SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO";
+SET FOREIGN_KEY_CHECKS = 0;
 START TRANSACTION;
 SET time_zone = "+00:00";
 
@@ -82,6 +83,10 @@ INSERT INTO `cargos` (`id`, `orden_id`, `rfc_id`, `periodo_inicio`, `periodo_fin
 -- Estructura de tabla para la tabla `cargo_items`
 --
 
+
+
+
+
 DROP TABLE IF EXISTS `cargo_items`;
 CREATE TABLE IF NOT EXISTS `cargo_items` (
   `id` int NOT NULL AUTO_INCREMENT,
@@ -99,6 +104,8 @@ CREATE TABLE IF NOT EXISTS `cargo_items` (
 --
 -- Volcado de datos para la tabla `cargo_items`
 --
+
+
 
 INSERT INTO `cargo_items` (`id`, `cargo_id`, `orden_item_id`, `concepto`, `monto_base`, `iva`, `total`) VALUES
 (1, 1, 1, 'cuenta - 1575', 1575.00, 252.00, 1827.00),
@@ -805,7 +812,7 @@ ALTER TABLE `usuario_rol`
   ADD CONSTRAINT `fk_ur_role` FOREIGN KEY (`rol_id`) REFERENCES `roles` (`id`) ON DELETE CASCADE,
   ADD CONSTRAINT `fk_ur_user` FOREIGN KEY (`usuario_id`) REFERENCES `usuarios` (`id`) ON DELETE CASCADE;
 COMMIT;
-
+SET FOREIGN_KEY_CHECKS = 1; -- Vuelve a activar la revisión
 /*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
 /*!40101 SET CHARACTER_SET_RESULTS=@OLD_CHARACTER_SET_RESULTS */;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
